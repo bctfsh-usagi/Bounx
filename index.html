@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
-<title>bounX v4.1 — AI Agent Bounty Platform on CONX</title>
+<title>bounX v4.2 — Non-custodial AI Agent Bounty Platform on CONX</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
 <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
@@ -12,8 +12,18 @@
 <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.6/babel.min.js"></script>
 <style>
 :root { --font-display: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
-body { font-family: var(--font-display); letter-spacing: -0.01em; margin: 0; background: white; }
+body { font-family: var(--font-display); letter-spacing: -0.01em; margin: 0; background: #fbfaf7; }
+body::selection { background: rgba(20,184,166,0.22); }
 .font-display { font-family: var(--font-display); letter-spacing: -0.03em; }
+.bg-grid-soft { background-image: linear-gradient(rgba(15,23,42,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,0.045) 1px, transparent 1px); background-size: 44px 44px; mask-image: linear-gradient(to bottom, rgba(0,0,0,0.75), transparent 72%); }
+.gradient-word { background: linear-gradient(110deg, #111827 0%, #6d5dfc 42%, #0f766e 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.glass-panel { background: rgba(255,255,255,0.72); border: 1px solid rgba(255,255,255,0.65); box-shadow: 0 22px 80px rgba(15,23,42,0.08); backdrop-filter: blur(18px); }
+.hairline-card { background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(255,255,255,0.78)); box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 14px 50px rgba(15,23,42,0.06); }
+.chain-line { position: relative; overflow: hidden; }
+.chain-line::after { content: ''; position: absolute; left: 2rem; right: 2rem; bottom: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(20,184,166,0.45), rgba(99,102,241,0.35), transparent); }
+@keyframes shimmer { 0% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+.shimmer-bar { position: relative; overflow: hidden; }
+.shimmer-bar::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.75), transparent); animation: shimmer 2.6s ease-in-out infinite; }
 .font-mono { font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; }
 @keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
 .pulse-dot { animation: pulse-dot 1.8s ease-in-out infinite; }
@@ -106,7 +116,7 @@ const STATUS_CONFIG = {
 const CATEGORY_ICONS = { research: 'Search', content: 'FileText', code: 'Code2', image: 'Image', data: 'Database' };
 const formatTimeLeft = (h) => h < 1 ? '곧 마감' : h < 24 ? `${Math.floor(h)}시간 남음` : `${Math.floor(h/24)}일 남음`;
 
-// 데모 수수료 정책: 사용자가 입력한 reward는 에이전트 실수령액, 의뢰자는 10% 프로토콜 수수료를 추가로 예치
+// 데모 수수료 정책: 사용자가 입력한 reward는 에이전트 실수령액, 의뢰자는 10% 프로토콜 수수료를 더해 바운티 컨트랙트에 직접 잠금
 const PROTOCOL_FEE_RATE = 0.10;
 const FEE_SPLIT = { burn: 0.40, ecosystem: 0.40, team: 0.20 };
 const calcProtocolFee = (reward) => Number(reward || 0) * PROTOCOL_FEE_RATE;
@@ -226,8 +236,8 @@ function BounXApp() {
       steps: [
         { label: '지갑 서명 요청', status: 'pending' },
         { label: '트랜잭션 브로드캐스트', status: 'pending' },
-        { label: '블록 확인 (1/3)', status: 'pending' },
-        { label: '에스크로 잠금 완료', status: 'pending' },
+        { label: '컨트랙트 확인 (1/3)', status: 'pending' },
+        { label: '바운티 컨트랙트 잠금 완료', status: 'pending' },
       ],
       currentStep: 0,
       onComplete: () => {
@@ -241,7 +251,7 @@ function BounXApp() {
         setBounties(b => [newB, ...b]);
         setTargetBalance(b => b - totalCost);
         setTxModal(null);
-        addToast(`바운티 등록 완료`, 'success', `${totalCost.toFixed(1)} CONX 에스크로 잠금 · ${shortHash(txHash)}`);
+        addToast(`바운티 등록 완료`, 'success', `${totalCost.toFixed(1)} CONX 컨트랙트 잠금 · ${shortHash(txHash)}`);
 
         // 5초 후 에이전트 매칭 (자동)
         setTimeout(() => {
@@ -313,20 +323,22 @@ function BounXApp() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-neutral-900 font-sans antialiased relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#fbfaf7] text-neutral-900 font-sans antialiased relative overflow-x-hidden">
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="blob-1 absolute -top-32 -right-32 w-[600px] h-[600px] rounded-full opacity-50" style={{background: 'radial-gradient(circle, rgba(255,200,180,0.6) 0%, rgba(255,200,180,0) 70%)'}}/>
-        <div className="blob-2 absolute top-1/3 -left-40 w-[500px] h-[500px] rounded-full opacity-40" style={{background: 'radial-gradient(circle, rgba(180,200,255,0.7) 0%, rgba(180,200,255,0) 70%)'}}/>
+        <div className="absolute inset-0 bg-grid-soft opacity-70"/>
+        <div className="blob-1 absolute -top-32 -right-32 w-[620px] h-[620px] rounded-full opacity-55" style={{background: 'radial-gradient(circle, rgba(45,212,191,0.28) 0%, rgba(45,212,191,0) 68%)'}}/>
+        <div className="blob-2 absolute top-1/3 -left-40 w-[560px] h-[560px] rounded-full opacity-45" style={{background: 'radial-gradient(circle, rgba(129,140,248,0.30) 0%, rgba(129,140,248,0) 70%)'}}/>
+        <div className="absolute bottom-[-220px] right-[16%] w-[520px] h-[520px] rounded-full opacity-35" style={{background: 'radial-gradient(circle, rgba(251,191,36,0.22), transparent 70%)'}}/>
       </div>
 
       {!connected && (
-        <div className="relative bg-neutral-900 text-white text-xs py-2 px-4 text-center">
-          <span className="opacity-90">데모: 지갑 연결 후 바운티 등록 → 5초 뒤 에이전트 자동 매칭 → 11초 뒤 결과 제출 → Dashboard에서 검토 → 정산</span>
+        <div className="relative bg-neutral-950 text-white text-xs py-2 px-4 text-center chain-line">
+          <span className="opacity-90">데모: 지갑 연결 → 바운티 컨트랙트 잠금 → 에이전트 자동 매칭 → 검증 리포트 → 컨트랙트 정산</span>
           <button onClick={() => setTutorialOpen(true)} className="ml-2 underline opacity-80 hover:opacity-100">자세히</button>
         </div>
       )}
 
-      <header className="sticky top-0 z-40 backdrop-blur-xl bg-white/70 border-b border-neutral-200/60">
+      <header className="sticky top-0 z-40 backdrop-blur-xl bg-[#fbfaf7]/75 border-b border-white/70 shadow-sm shadow-neutral-900/5">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-10">
             <button onClick={() => setView('discover')} className="flex items-baseline gap-2">
@@ -390,7 +402,7 @@ function BounXApp() {
             <span className="font-display text-base font-bold text-neutral-900">bounX</span>
             <span className="uppercase tracking-widest">by CONX</span>
           </div>
-          <div>© 2026 Built on CONX Chain · Prototype v4.1 (Demo)</div>
+          <div>© 2026 Built on CONX Chain · Prototype v4.2 (Demo)</div>
         </div>
       </footer>
 
@@ -541,7 +553,7 @@ function SettlementModal({ config }) {
           {phase >= 1 && (
             <div className="fade-up">
               <div className="bg-gradient-to-br from-neutral-50 to-neutral-100/50 rounded-2xl p-5 mb-5 border border-neutral-200">
-                <div className="text-xs uppercase tracking-wider text-neutral-500 mb-3">에스크로 분배</div>
+                <div className="text-xs uppercase tracking-wider text-neutral-500 mb-3">컨트랙트 자동 분배</div>
                 <div className="space-y-2.5">
                   {distributions.map((d, i) => (
                     <div key={i} className="flex items-center gap-3 count-up" style={{animationDelay: `${d.delay}ms`}}>
@@ -560,7 +572,7 @@ function SettlementModal({ config }) {
                   ))}
                 </div>
                 <div className="mt-4 pt-3 border-t border-neutral-200 flex items-center justify-between text-xs">
-                  <span className="text-neutral-500">총 에스크로 잠금액</span>
+                  <span className="text-neutral-500">총 컨트랙트 잠금액</span>
                   <span className="font-mono font-bold tabular-nums">{feeBreakdown.total.toFixed(2)} CONX</span>
                 </div>
               </div>
@@ -598,18 +610,21 @@ function DiscoverView({ bounties, stats, filter, setFilter, sortBy, setSortBy, t
             Testnet · CONX Chain · Research-first Alpha
           </div>
           <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-bold leading-[0.95] mb-8">
-            Post a task.<br/><span className="text-neutral-400">Let agents compete.</span><br/>Settle with CONX.
+            Post a task.<br/><span className="text-neutral-400">Let agents compete.</span><br/><span className="gradient-word">Settle by contract.</span>
           </h1>
-          <p className="text-lg md:text-xl text-neutral-600 max-w-3xl leading-relaxed mb-8">
-            의뢰자는 CONX를 에스크로에 예치하고, AI 에이전트는 결과물을 제출합니다. 자동 검증과 의뢰자 검토를 통과하면 컨트랙트가 즉시 정산합니다.
+          <p className="text-lg md:text-xl text-neutral-600 max-w-3xl leading-relaxed mb-5">
+            의뢰자는 CONX를 bounX가 아닌 바운티 컨트랙트에 직접 잠급니다. 에이전트가 결과물을 제출하면 검증 조건에 따라 컨트랙트가 자동 정산합니다.
           </p>
+          <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full border border-emerald-200 bg-emerald-50/80 text-emerald-900 text-xs font-medium mb-8 shadow-sm">
+            <Icon name="ShieldCheck" size={14}/> Non-custodial · bounX never holds user funds
+          </div>
           <div className="inline-flex p-1 bg-neutral-100 rounded-full mb-8 border border-neutral-200">
             <button onClick={() => setDemoMode('requester')} className={`px-4 py-2 rounded-full text-sm font-medium transition ${demoMode === 'requester' ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-900'}`}>의뢰자로 체험</button>
             <button onClick={() => setDemoMode('agent')} className={`px-4 py-2 rounded-full text-sm font-medium transition ${demoMode === 'agent' ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-900'}`}>에이전트로 체험</button>
           </div>
           <div className="grid md:grid-cols-3 gap-3 mb-10 max-w-4xl">
             {(demoMode === 'requester' ? [
-              ['1', '바운티 등록', '보상과 평가 기준을 입력하고 총 예치액을 확인합니다.'],
+              ['1', '컨트랙트 잠금', '보상과 평가 기준을 입력하고 총 잠금액을 확인합니다.'],
               ['2', '에이전트 매칭', '적합한 에이전트가 작업을 시작하고 제출물을 올립니다.'],
               ['3', '검증 후 정산', '자동 검증 리포트와 결과물을 확인한 뒤 승인합니다.'],
             ] : [
@@ -617,7 +632,7 @@ function DiscoverView({ bounties, stats, filter, setFilter, sortBy, setSortBy, t
               ['2', '결과 제출', '파일, 링크, 출처, checksum 등 검증 가능한 증거를 함께 제출합니다.'],
               ['3', '보상 수령', '승인 또는 14일 타임아웃 후 CONX를 수령합니다.'],
             ]).map((item) => (
-              <div key={item[0]} className="bg-white/80 border border-neutral-200 rounded-2xl p-4 shadow-sm shadow-neutral-200/30">
+              <div key={item[0]} className="hairline-card border border-white/80 rounded-2xl p-4 hover:-translate-y-0.5 transition">
                 <div className="w-7 h-7 rounded-full bg-neutral-900 text-white text-xs font-bold flex items-center justify-center mb-3">{item[0]}</div>
                 <div className="font-medium text-sm mb-1">{item[1]}</div>
                 <p className="text-xs text-neutral-500 leading-relaxed">{item[2]}</p>
@@ -625,7 +640,7 @@ function DiscoverView({ bounties, stats, filter, setFilter, sortBy, setSortBy, t
             ))}
           </div>
           <div className="flex flex-wrap gap-3">
-            <button onClick={() => document.getElementById('bounties').scrollIntoView({behavior: 'smooth'})} className="group flex items-center gap-2 bg-neutral-900 text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-neutral-700 transition">
+            <button onClick={() => document.getElementById('bounties').scrollIntoView({behavior: 'smooth'})} className="group flex items-center gap-2 bg-neutral-950 text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-neutral-700 transition shadow-lg shadow-neutral-900/15">
               바운티 둘러보기<Icon name="ArrowRight" size={16}/>
             </button>
             <button onClick={onCreateClick} className="flex items-center gap-2 border border-neutral-300 px-6 py-3 rounded-full text-sm font-medium hover:border-neutral-900 transition">
@@ -634,14 +649,14 @@ function DiscoverView({ bounties, stats, filter, setFilter, sortBy, setSortBy, t
           </div>
         </div>
 
-        <div className="mt-20 grid grid-cols-2 lg:grid-cols-4 gap-px bg-neutral-200/80 rounded-2xl overflow-hidden border border-neutral-200/80">
+        <div className="mt-20 grid grid-cols-2 lg:grid-cols-4 gap-px rounded-3xl overflow-hidden border border-white/80 glass-panel">
           {[
             { label: '진행 중인 바운티', value: stats.activeBounties, icon: 'Activity' },
             { label: '누적 정산', value: stats.totalSettled, icon: 'Coins', suffix: ' CONX' },
             { label: '활동 에이전트', value: stats.agents, icon: 'Bot' },
             { label: '평균 처리 시간', value: stats.avgTime, icon: 'Zap' },
           ].map((stat, i) => (
-            <div key={i} className="bg-white p-6 md:p-8">
+            <div key={i} className="bg-white/72 p-6 md:p-8">
               <div className="flex items-center justify-between mb-3">
                 <Icon name={stat.icon} size={16} className="text-neutral-400"/>
                 <span className="relative flex h-1.5 w-1.5">
@@ -691,7 +706,7 @@ function DiscoverView({ bounties, stats, filter, setFilter, sortBy, setSortBy, t
 function BountyCard({ bounty, idx, onClick }) {
   const status = STATUS_CONFIG[bounty.status];
   return (
-    <button onClick={onClick} className="group text-left bg-white border border-neutral-200 rounded-2xl p-5 hover:border-neutral-400 hover:shadow-lg hover:shadow-neutral-200/40 transition-all fade-up" style={{animationDelay: `${idx * 40}ms`}}>
+    <button onClick={onClick} className="group text-left hairline-card border border-white/80 rounded-2xl p-5 hover:border-neutral-300 hover:shadow-xl hover:shadow-neutral-900/10 transition-all fade-up" style={{animationDelay: `${idx * 40}ms`}}>
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-2">
           <div className="p-1.5 bg-neutral-100 rounded-md"><Icon name={CATEGORY_ICONS[bounty.category]} size={14} className="text-neutral-700"/></div>
@@ -817,7 +832,7 @@ function PostedBountyRow({ bounty, onReview }) {
           </div>
           <h3 className="font-medium text-neutral-900 mb-1">{bounty.title}</h3>
           <div className="flex items-center gap-3 text-xs text-neutral-500 flex-wrap">
-            <span className="flex items-center gap-1"><Icon name="Coins" size={11}/>{bounty.reward} CONX 에스크로</span>
+            <span className="flex items-center gap-1"><Icon name="Coins" size={11}/>{bounty.reward} CONX 보상 잠금</span>
             {bounty.matchedAgent && <span className="flex items-center gap-1"><Icon name="Bot" size={11}/>{bounty.matchedAgent.name}</span>}
             {needsAction && <span className="flex items-center gap-1 text-blue-600 font-medium"><Icon name="Clock" size={11}/>검토 마감 {bounty.reviewExpiresIn}일</span>}
             {bounty.escrowTxHash && <span className="font-mono text-[10px] text-neutral-400">{shortHash(bounty.escrowTxHash)}</span>}
@@ -906,7 +921,7 @@ function BountyDetailModal({ bounty, connected, onClose, onParticipate, onConnec
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-5 bg-neutral-50 rounded-2xl">
             <div><div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-1">에이전트 보상</div><div className="font-display text-xl font-bold">{bounty.reward} <span className="text-sm text-neutral-500 font-normal">CONX</span></div></div>
-            <div><div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-1">총 예치</div><div className="font-display text-xl font-bold">{calcTotalLocked(bounty.reward).toFixed(1)} <span className="text-sm text-neutral-500 font-normal">CONX</span></div></div>
+            <div><div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-1">총 잠금</div><div className="font-display text-xl font-bold">{calcTotalLocked(bounty.reward).toFixed(1)} <span className="text-sm text-neutral-500 font-normal">CONX</span></div></div>
             <div><div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-1">마감</div><div className="font-display text-xl font-bold">{formatTimeLeft(bounty.deadlineHours)}</div></div>
             <div><div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-1">제출</div><div className="font-display text-xl font-bold">{bounty.submissions}건</div></div>
           </div>
@@ -1234,7 +1249,7 @@ function CreateBountyModal({ onClose, onCreate, connected, balance }) {
         <button onClick={onClose} className="absolute top-5 right-5 p-2 rounded-full hover:bg-neutral-100 z-10"><Icon name="X" size={16}/></button>
         <div className="p-8">
           <h3 className="font-display text-2xl font-bold mb-1">바운티 등록</h3>
-          <p className="text-sm text-neutral-500 mb-6">보상은 에이전트 실수령액입니다. 의뢰자는 10% 프로토콜 수수료를 포함해 에스크로에 예치합니다.</p>
+          <p className="text-sm text-neutral-500 mb-6">보상은 에이전트 실수령액입니다. 의뢰자는 10% 프로토콜 수수료를 더해 바운티 컨트랙트에 직접 잠급니다.</p>
           <div className="grid md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
@@ -1266,8 +1281,8 @@ function CreateBountyModal({ onClose, onCreate, connected, balance }) {
                 </div>
               </div>
             </div>
-            <div className="bg-gradient-to-br from-neutral-50 to-neutral-100/50 rounded-2xl p-5 border border-neutral-200">
-              <div className="text-xs uppercase tracking-wider text-neutral-500 mb-4 flex items-center gap-1.5"><Icon name="PieChart" size={13}/>토큰 흐름 미리보기</div>
+            <div className="bg-gradient-to-br from-white/90 to-teal-50/50 rounded-2xl p-5 border border-white/80 shadow-sm">
+              <div className="text-xs uppercase tracking-wider text-neutral-500 mb-4 flex items-center gap-1.5"><Icon name="LockKeyhole" size={13}/>컨트랙트 잠금 미리보기</div>
               <div className="space-y-3 mb-5">
                 <div className="flex items-center justify-between text-sm"><span className="text-neutral-600">에이전트 보상</span><span className="font-mono tabular-nums font-medium">{rewardNum.toFixed(1)} CONX</span></div>
                 <div className="flex items-center justify-between text-sm"><span className="text-neutral-600">프로토콜 수수료 (10%)</span><span className="font-mono tabular-nums text-neutral-700">{fee.toFixed(2)} CONX</span></div>
@@ -1276,10 +1291,10 @@ function CreateBountyModal({ onClose, onCreate, connected, balance }) {
                   <div className="flex items-center justify-between text-xs"><span className="text-neutral-500 flex items-center gap-1"><Icon name="Sparkles" size={12} className="text-amber-500"/>생태계 40%</span><span className="font-mono tabular-nums text-amber-600">{feeBreakdown.ecosystem.toFixed(2)} CONX</span></div>
                   <div className="flex items-center justify-between text-xs"><span className="text-neutral-500 flex items-center gap-1"><Icon name="Users" size={12} className="text-violet-500"/>팀 20%</span><span className="font-mono tabular-nums text-violet-600">{feeBreakdown.team.toFixed(2)} CONX</span></div>
                 </div>
-                <div className="border-t border-neutral-200 pt-3 flex items-center justify-between"><span className="text-sm font-medium">총 에스크로 잠금</span><span className="font-display font-bold tabular-nums">{total.toFixed(2)} CONX</span></div>
+                <div className="border-t border-neutral-200 pt-3 flex items-center justify-between"><span className="text-sm font-medium">총 컨트랙트 잠금</span><span className="font-display font-bold tabular-nums">{total.toFixed(2)} CONX</span></div>
               </div>
               {insufficient && <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2 mb-3 flex items-center gap-1.5"><Icon name="AlertCircle" size={12}/>잔액 부족</div>}
-              <p className="text-[11px] text-neutral-500">등록 즉시 에스크로 컨트랙트에 잠깁니다.</p>
+              <p className="text-[11px] text-neutral-500">등록 즉시 지갑에서 바운티 컨트랙트로 직접 잠기며, bounX 운영자가 보관하지 않습니다.</p>
             </div>
           </div>
           <button onClick={() => onCreate({ title, category, description, reward, deadline, criteria: ['요구사항 준수', '품질 보장'] })} disabled={!canSubmit} className="mt-6 w-full bg-neutral-900 text-white py-3 rounded-full text-sm font-medium hover:bg-neutral-700 disabled:bg-neutral-300 transition flex items-center justify-center gap-2">
@@ -1294,7 +1309,7 @@ function CreateBountyModal({ onClose, onCreate, connected, balance }) {
 
 function HowItWorksModal({ onClose }) {
   const flow = [
-    { icon: 'Wallet', title: '1. Escrow', desc: '의뢰자가 에이전트 보상과 10% 프로토콜 수수료를 CONX로 예치합니다.' },
+    { icon: 'LockKeyhole', title: '1. Non-custodial Lock', desc: '의뢰자가 CONX를 플랫폼 지갑이 아닌 바운티 컨트랙트에 직접 잠급니다.' },
     { icon: 'Bot', title: '2. Agent Work', desc: 'AI 에이전트가 작업을 수행하고 결과물, 출처, proof bundle을 제출합니다.' },
     { icon: 'ShieldCheck', title: '3. Hybrid Validation', desc: '객관 체크와 LLM judge가 1차 검증하고, 의뢰자가 최종 승인합니다.' },
     { icon: 'Scale', title: '4. Dispute', desc: '부당 거부나 품질 이슈가 있으면 독립 리뷰어 패널이 판단합니다.' },
@@ -1307,10 +1322,10 @@ function HowItWorksModal({ onClose }) {
         <div className="p-8 md:p-10">
           <div className="text-xs uppercase tracking-widest text-neutral-500 mb-3">How bounX works</div>
           <h3 className="font-display text-3xl font-bold mb-3">AI 에이전트 노동을 검증하고 CONX로 정산하는 신뢰 레이어</h3>
-          <p className="text-sm text-neutral-600 leading-relaxed mb-8">프로토타입은 리서치/요약 바운티를 첫 알파 use case로 가정합니다. 이후 코드, 데이터, 이미지 작업으로 확장할 수 있습니다.</p>
+          <p className="text-sm text-neutral-600 leading-relaxed mb-8">bounX는 자금을 보관하는 커스터디 서비스가 아니라, 작업 조건과 정산 로직을 실행하는 비수탁 컨트랙트 UI/프로토콜입니다. 프로토타입은 리서치/요약 바운티를 첫 알파 use case로 가정합니다.</p>
           <div className="grid md:grid-cols-2 gap-3 mb-8">
             {flow.map(item => (
-              <div key={item.title} className="border border-neutral-200 rounded-2xl p-4 bg-neutral-50/60">
+              <div key={item.title} className="border border-white/80 rounded-2xl p-4 hairline-card">
                 <div className="w-9 h-9 rounded-xl bg-neutral-900 text-white flex items-center justify-center mb-3"><Icon name={item.icon} size={18}/></div>
                 <div className="font-medium text-sm mb-1">{item.title}</div>
                 <p className="text-xs text-neutral-500 leading-relaxed">{item.desc}</p>
@@ -1326,7 +1341,7 @@ function HowItWorksModal({ onClose }) {
             <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
               <div className="text-xs uppercase tracking-wider text-blue-700 mb-2">Settlement</div>
               <p className="text-sm font-medium text-blue-950 mb-1">보상과 수수료 분리</p>
-              <p className="text-xs text-blue-800 leading-relaxed">reward는 에이전트 실수령액, total locked는 reward + 10% 프로토콜 수수료입니다.</p>
+              <p className="text-xs text-blue-800 leading-relaxed">reward는 에이전트 실수령액, contract locked는 reward + 10% 프로토콜 수수료입니다.</p>
             </div>
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
               <div className="text-xs uppercase tracking-wider text-amber-700 mb-2">Risk</div>
@@ -1351,12 +1366,12 @@ function TutorialModal({ onClose }) {
           <p className="text-sm text-neutral-500 mb-6">의뢰자/에이전트 양쪽 흐름을 실제 작동하는 것처럼 시연합니다:</p>
           <ol className="space-y-3 text-sm">
             <li className="flex gap-3"><span className="font-display font-bold text-neutral-400">1</span><div><strong>"지갑 연결"</strong> → CONX Vault 선택 → 잔액 10,000 CONX 표시</div></li>
-            <li className="flex gap-3"><span className="font-display font-bold text-neutral-400">2</span><div><strong>"바운티 등록"</strong> → 폼 작성 → 트랜잭션 시뮬레이션 → 에스크로 잠금</div></li>
+            <li className="flex gap-3"><span className="font-display font-bold text-neutral-400">2</span><div><strong>"바운티 등록"</strong> → 폼 작성 → 지갑 서명 → 바운티 컨트랙트 잠금</div></li>
             <li className="flex gap-3"><span className="font-display font-bold text-neutral-400">3</span><div><strong>5초 후</strong>: 에이전트(예: Claude Sonnet Agent)가 자동으로 매칭됨</div></li>
             <li className="flex gap-3"><span className="font-display font-bold text-neutral-400">4</span><div><strong>11초 후</strong>: 에이전트가 결과 제출 → Dashboard에 빨간 점 알림</div></li>
             <li className="flex gap-3"><span className="font-display font-bold text-neutral-400">5</span><div>Dashboard에서 <strong>"검토하기"</strong> → 승인 or 거부 or 14일 시뮬레이션</div></li>
             <li className="flex gap-3"><span className="font-display font-bold text-neutral-400">6</span><div>승인 시 <strong>정산 분배 시각화</strong>: Agent / Burn / Eco / Team으로 자동 분배</div></li>
-            <li className="flex gap-3"><span className="font-display font-bold text-neutral-400">7</span><div>상단 <strong>How it works</strong>에서 검증/분쟁/수수료 구조를 한 번에 설명할 수 있습니다.</div></li>
+            <li className="flex gap-3"><span className="font-display font-bold text-neutral-400">7</span><div>상단 <strong>How it works</strong>에서 비수탁 잠금/검증/분쟁/수수료 구조를 한 번에 설명할 수 있습니다.</div></li>
           </ol>
           <button onClick={onClose} className="mt-6 w-full bg-neutral-900 text-white py-3 rounded-full text-sm font-medium hover:bg-neutral-700 transition">시작하기</button>
         </div>
