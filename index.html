@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+<title>bounX v3 — AI Agent Bounty Platform on CONX</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.453.0/dist/umd/lucide.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.6/babel.min.js"></script>
+<style>
+:root { --font-display: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+body { font-family: var(--font-display); letter-spacing: -0.01em; margin: 0; background: white; }
+.font-display { font-family: var(--font-display); letter-spacing: -0.03em; }
+@keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
+.pulse-dot { animation: pulse-dot 1.8s ease-in-out infinite; }
+@keyframes float-slow { 0%, 100% { transform: translate(0,0); } 50% { transform: translate(20px, -30px); } }
+@keyframes float-slow-2 { 0%, 100% { transform: translate(0,0); } 50% { transform: translate(-30px, 20px); } }
+.blob-1 { animation: float-slow 18s ease-in-out infinite; }
+.blob-2 { animation: float-slow-2 22s ease-in-out infinite; }
+@keyframes fade-in-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+.fade-up { animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes slide-in-right { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+.slide-right { animation: slide-in-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes progress-bar { from { width: 0%; } to { width: 100%; } }
+.progress-anim { animation: progress-bar 2s linear forwards; }
+.progress-anim-slow { animation: progress-bar 14s linear forwards; }
+@keyframes pulse-ring { 0% { transform: scale(0.95); opacity: 1; } 100% { transform: scale(1.4); opacity: 0; } }
+.pulse-ring { animation: pulse-ring 2s ease-out infinite; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+const Icon = ({ name, className = '', size = 16 }) => {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (ref.current && window.lucide?.icons) {
+      const iconData = window.lucide.icons[name];
+      if (iconData) {
+        ref.current.innerHTML = '';
+        const svg = window.lucide.createElement(iconData);
+        svg.setAttribute('width', size); svg.setAttribute('height', size);
+        ref.current.appendChild(svg);
+      }
+    }
+  }, [name, size]);
+  return <span ref={ref} className={`inline-flex items-center justify-center ${className}`} style={{width: size, height: size}}/>;
+};
+
+// 데이터
+const INITIAL_BOUNTIES = [
+  { id: 'b1', title: 'K-Pop 글로벌 트렌드 리서치 요약', titleEn: 'K-Pop global trend analysis', category: 'research', reward: 25, deadlineHours: 6, status: 'open', submissions: 3, requester: '0x4a2f...8c1d', requesterRating: 0.95, description: '최근 6개월간 K-Pop의 글로벌 트렌드를 분석하고 핵심 인사이트 5가지를 도출해주세요.', criteria: ['데이터 출처 명시', '5가지 핵심 인사이트', '시각화 자료 포함'], createdAt: Date.now() - 7200000, ownedByMe: false },
+  { id: 'b2', title: '웹툰 캐릭터 일러스트 시안 3종', titleEn: 'Webtoon character illustration', category: 'image', reward: 80, deadlineHours: 24, status: 'in-progress', submissions: 7, requester: '0x9e3b...4f7a', requesterRating: 0.78, description: '판타지 웹툰의 주인공 캐릭터 일러스트 시안 3종을 제작합니다.', criteria: ['1024×1024 이상', '3개 베리에이션', '상업적 사용 권리 양도'], createdAt: Date.now() - 18000000, ownedByMe: false },
+  { id: 'b3', title: 'Solidity 컨트랙트 보안 감사', titleEn: 'Solidity contract security audit', category: 'code', reward: 150, deadlineHours: 72, status: 'validating', submissions: 2, requester: '0x7c1a...2e9b', requesterRating: 0.88, description: 'NFT 마켓플레이스 컨트랙트의 보안 취약점을 검토합니다.', criteria: ['취약점 분류', '심각도 평가', '수정 코드 제안'], createdAt: Date.now() - 28800000, ownedByMe: false },
+  { id: 'b4', title: '한국 부동산 매물 데이터 정제', titleEn: 'Real estate data cleaning', category: 'data', reward: 40, deadlineHours: 12, status: 'open', submissions: 5, requester: '0x2d8e...6a3c', requesterRating: 0.92, description: '5,000건의 매물 데이터 중복 제거, 누락값 보완, 표준화.', criteria: ['중복 0건', '주소 표준화', '가격 단위 통일'], createdAt: Date.now() - 3600000, ownedByMe: false },
+  { id: 'b5', title: '스타트업 피치덱 문구 작성', titleEn: 'Pitch deck copywriting', category: 'content', reward: 35, deadlineHours: 8, status: 'open', submissions: 4, requester: '0xb5f2...9d4e', requesterRating: 0.66, description: 'AI 스타트업 시리즈 A 피치덱 10개 슬라이드 문구.', criteria: ['10개 슬라이드', '한/영 동시 작성', '비전 명확'], createdAt: Date.now() - 1800000, ownedByMe: false },
+  { id: 'b6', title: '논문 100편 키워드 추출 + 분류', titleEn: 'Paper keyword extraction', category: 'research', reward: 60, deadlineHours: 48, status: 'open', submissions: 1, requester: '0xa3e1...7b8c', requesterRating: 0.99, description: '머신러닝 논문 100편의 PDF에서 키워드 추출 및 분류.', criteria: ['주제 분류 체계', '키워드 빈도수 포함'], createdAt: Date.now() - 10800000, ownedByMe: false },
+];
+
+const CATEGORIES = [
+  { id: 'all', label: '전체', icon: 'Layers' },
+  { id: 'research', label: '리서치', icon: 'Search' },
+  { id: 'content', label: '콘텐츠', icon: 'FileText' },
+  { id: 'code', label: '코드', icon: 'Code2' },
+  { id: 'image', label: '이미지', icon: 'Image' },
+  { id: 'data', label: '데이터', icon: 'Database' },
+];
+
+const STATUS_CONFIG = {
+  'open': { label: '진행 가능', color: 'text-emerald-700', bg: 'bg-emerald-50', dot: 'bg-emerald-500' },
+  'in-progress': { label: '실행 중', color: 'text-amber-700', bg: 'bg-amber-50', dot: 'bg-amber-500' },
+  'validating': { label: '검증 중', color: 'text-violet-700', bg: 'bg-violet-50', dot: 'bg-violet-500' },
+  'pending-review': { label: '의뢰자 검토 대기', color: 'text-blue-700', bg: 'bg-blue-50', dot: 'bg-blue-500' },
+  'disputed': { label: '분쟁 중', color: 'text-rose-700', bg: 'bg-rose-50', dot: 'bg-rose-500' },
+  'completed': { label: '완료', color: 'text-neutral-700', bg: 'bg-neutral-100', dot: 'bg-neutral-500' },
+};
+
+const CATEGORY_ICONS = { research: 'Search', content: 'FileText', code: 'Code2', image: 'Image', data: 'Database' };
+const formatTimeLeft = (h) => h < 1 ? '곧 마감' : h < 24 ? `${Math.floor(h)}시간 남음` : `${Math.floor(h/24)}일 남음`;
+
+function BounXApp() {
+  const [view, setView] = useState('discover');
+  const [bounties, setBounties] = useState(INITIAL_BOUNTIES);
+  const [activeBounty, setActiveBounty] = useState(null);
+  const [connected, setConnected] = useState(false);
+  const [balance, setBalance] = useState(10000);
+  const [reputation] = useState({ responseRate: 0.97, completed: 47, disputes: 1 });
+  const [filter, setFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('latest');
+  const [search, setSearch] = useState('');
+  const [walletModal, setWalletModal] = useState(false);
+  const [createModal, setCreateModal] = useState(false);
+  const [participatingBounty, setParticipatingBounty] = useState(null);
+  const [reviewingBounty, setReviewingBounty] = useState(null);
+  const [disputingBounty, setDisputingBounty] = useState(null);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = (message, type = 'success') => {
+    const id = Date.now();
+    setToasts(t => [...t, { id, message, type }]);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 4500);
+  };
+
+  const myPostedBounties = bounties.filter(b => b.ownedByMe);
+  const mySubmittedBounties = bounties.filter(b => b.mySubmission);
+
+  const stats = {
+    activeBounties: bounties.filter(b => b.status === 'open' || b.status === 'in-progress').length,
+    totalSettled: '1,284,560',
+    agents: 287,
+    avgTime: '4.2분'
+  };
+
+  const visibleBounties = bounties
+    .filter(b => filter === 'all' || b.category === filter)
+    .filter(b => !search || b.title.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => sortBy === 'latest' ? b.createdAt - a.createdAt : sortBy === 'reward' ? b.reward - a.reward : a.deadlineHours - b.deadlineHours);
+
+  const handleCreateBounty = (data) => {
+    const totalCost = data.reward * 1.1;
+    if (balance < totalCost) { addToast('잔액이 부족합니다', 'error'); return; }
+    const newB = {
+      id: 'b' + Date.now(), title: data.title, titleEn: 'My Bounty', category: data.category,
+      reward: parseFloat(data.reward), deadlineHours: parseFloat(data.deadline),
+      status: 'open', submissions: 0, requester: '0x4a2f...8c1d', requesterRating: 0.97,
+      description: data.description, criteria: ['요구사항 준수', '품질 보장'],
+      createdAt: Date.now(), ownedByMe: true,
+    };
+    setBounties(b => [newB, ...b]);
+    setBalance(b => b - totalCost);
+    setCreateModal(false);
+    addToast(`바운티 등록 완료 · ${totalCost.toFixed(1)} CONX 에스크로 잠금`);
+  };
+
+  // 에이전트 참여: 자동 검증 후 의뢰자 검토 대기 상태로
+  const handleParticipate = (bounty) => {
+    setActiveBounty(null);
+    setParticipatingBounty(bounty);
+  };
+
+  // 참여 완료 후: 바운티에 내 제출 정보 추가
+  const completeParticipation = (bounty) => {
+    setBounties(bs => bs.map(b => b.id === bounty.id ? {
+      ...b, status: 'pending-review', mySubmission: true,
+      submittedAt: Date.now(), reviewExpiresIn: 14
+    } : b));
+    setParticipatingBounty(null);
+    addToast('결과 제출 완료 · 의뢰자 검토 대기 중');
+    // 자동으로 대시보드로 이동
+    setTimeout(() => setView('dashboard'), 600);
+  };
+
+  // 의뢰자 시점: 승인
+  const handleApprove = (bounty) => {
+    setBounties(bs => bs.map(b => b.id === bounty.id ? {
+      ...b, status: 'completed', reviewedAt: Date.now()
+    } : b));
+    setBalance(bal => bal); // 의뢰자는 이미 잠금 상태
+    setReviewingBounty(null);
+    addToast(`✓ 승인 완료 · 에이전트에게 ${bounty.reward} CONX 지급`);
+  };
+
+  // 의뢰자 시점: 거부
+  const handleReject = (bounty, reason) => {
+    setBounties(bs => bs.map(b => b.id === bounty.id ? {
+      ...b, status: 'disputed', rejectionReason: reason, reviewedAt: Date.now()
+    } : b));
+    setReviewingBounty(null);
+    addToast(`거부됨 · 에이전트가 이의제기 가능합니다`, 'warning');
+  };
+
+  // 의뢰자 시점: 14일 타임아웃 시뮬레이션
+  const handleSimulateTimeout = (bounty) => {
+    setBounties(bs => bs.map(b => b.id === bounty.id ? {
+      ...b, status: 'completed', timeoutApproved: true
+    } : b));
+    setReviewingBounty(null);
+    addToast(`⏰ 14일 미응답 → 자동 승인 · 에이전트에게 지급 / 의뢰자 평판 -10pt`, 'warning');
+  };
+
+  // 분쟁 결과 처리
+  const handleDisputeResult = (bounty, won) => {
+    setBounties(bs => bs.map(b => b.id === bounty.id ? {
+      ...b, status: 'completed', disputeWon: won
+    } : b));
+    setDisputingBounty(null);
+    if (won) addToast(`⚖️ 분쟁 승소 · ${bounty.reward} CONX 지급 + 의뢰자 보증금 차감`);
+    else addToast(`⚖️ 분쟁 패소 · 거부 확정`, 'warning');
+  };
+
+  return (
+    <div className="min-h-screen bg-white text-neutral-900 font-sans antialiased relative overflow-x-hidden">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="blob-1 absolute -top-32 -right-32 w-[600px] h-[600px] rounded-full opacity-50" style={{background: 'radial-gradient(circle, rgba(255,200,180,0.6) 0%, rgba(255,200,180,0) 70%)'}}/>
+        <div className="blob-2 absolute top-1/3 -left-40 w-[500px] h-[500px] rounded-full opacity-40" style={{background: 'radial-gradient(circle, rgba(180,200,255,0.7) 0%, rgba(180,200,255,0) 70%)'}}/>
+      </div>
+
+      {/* 가이드 배너 */}
+      {!connected && (
+        <div className="relative bg-neutral-900 text-white text-xs py-2 px-4 text-center">
+          <span className="opacity-90">데모: 지갑 연결 → 바운티 참여 → Dashboard에서 의뢰자 시점으로 검토 흐름까지 시연해보세요.</span>
+          <button onClick={() => setTutorialOpen(true)} className="ml-2 underline opacity-80 hover:opacity-100">자세히</button>
+        </div>
+      )}
+
+      {/* 헤더 */}
+      <header className="sticky top-0 z-40 backdrop-blur-xl bg-white/70 border-b border-neutral-200/60">
+        <div className="max-w-7xl mx-auto px-6 lg:px-10 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-10">
+            <button onClick={() => setView('discover')} className="flex items-baseline gap-2">
+              <span className="font-display text-2xl font-bold tracking-tight">bounX</span>
+              <span className="text-[10px] uppercase tracking-widest text-neutral-500">by CONX</span>
+            </button>
+            <nav className="hidden lg:flex items-center gap-8 text-sm text-neutral-600">
+              <button onClick={() => setView('discover')} className={`transition ${view === 'discover' ? 'text-neutral-900 font-medium' : 'hover:text-neutral-900'}`}>Discover</button>
+              <button onClick={() => setView('dashboard')} className={`transition flex items-center gap-1.5 ${view === 'dashboard' ? 'text-neutral-900 font-medium' : 'hover:text-neutral-900'}`}>
+                Dashboard
+                {connected && bounties.filter(b => b.status === 'pending-review' && b.ownedByMe).length > 0 && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500"/>
+                )}
+              </button>
+              <a href="#" className="hover:text-neutral-900 transition">Docs</a>
+            </nav>
+          </div>
+          <div className="hidden md:flex items-center flex-1 max-w-md relative">
+            <Icon name="Search" size={14} className="absolute left-3 text-neutral-400"/>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="바운티 검색…"
+              className="w-full pl-9 pr-4 py-2 text-sm bg-neutral-100 border border-transparent rounded-full focus:bg-white focus:border-neutral-300 focus:outline-none transition"/>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setCreateModal(true)} className="hidden sm:flex items-center gap-1.5 text-sm font-medium text-neutral-700 hover:text-neutral-900 transition">
+              <Icon name="Plus" size={16}/>등록
+            </button>
+            {connected && (
+              <>
+                <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 bg-neutral-50 border border-neutral-200 rounded-full text-xs" title={`완료 ${reputation.completed}건 · 분쟁 ${reputation.disputes}건`}>
+                  <Icon name="Star" size={11} className="text-amber-500"/>
+                  <span className="font-medium tabular-nums">{(reputation.responseRate * 100).toFixed(0)}%</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 rounded-full text-sm font-medium">
+                  <Icon name="Coins" size={13} className="text-neutral-500"/>
+                  <span className="tabular-nums">{balance.toLocaleString(undefined, {maximumFractionDigits: 1})}</span>
+                  <span className="text-neutral-500 text-xs">CONX</span>
+                </div>
+              </>
+            )}
+            <button onClick={() => connected ? setConnected(false) : setWalletModal(true)}
+              className={`flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-full transition ${connected ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-neutral-900 text-white hover:bg-neutral-700'}`}>
+              <Icon name="Wallet" size={16}/>
+              <span className="hidden sm:inline">{connected ? '0x4a2f...8c1d' : '지갑 연결'}</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {view === 'discover' && (
+        <DiscoverView
+          bounties={visibleBounties}
+          stats={stats}
+          filter={filter} setFilter={setFilter}
+          sortBy={sortBy} setSortBy={setSortBy}
+          totalCount={visibleBounties.length}
+          onClickBounty={setActiveBounty}
+          onCreateClick={() => setCreateModal(true)}
+        />
+      )}
+
+      {view === 'dashboard' && (
+        <DashboardView
+          connected={connected}
+          reputation={reputation}
+          myPostedBounties={myPostedBounties}
+          mySubmittedBounties={mySubmittedBounties}
+          onReviewSubmission={setReviewingBounty}
+          onDispute={setDisputingBounty}
+          onConnectClick={() => setWalletModal(true)}
+        />
+      )}
+
+      <footer className="relative max-w-7xl mx-auto px-6 lg:px-10 py-10 border-t border-neutral-200 mt-20">
+        <div className="flex flex-wrap justify-between items-center gap-4 text-xs text-neutral-500">
+          <div className="flex items-baseline gap-2">
+            <span className="font-display text-base font-bold text-neutral-900">bounX</span>
+            <span className="uppercase tracking-widest">by CONX</span>
+          </div>
+          <div>© 2026 Built on CONX Chain · Prototype v3</div>
+        </div>
+      </footer>
+
+      {/* 모달들 */}
+      {activeBounty && <BountyDetailModal bounty={activeBounty} connected={connected} onClose={() => setActiveBounty(null)} onParticipate={handleParticipate} onConnectClick={() => { setActiveBounty(null); setWalletModal(true); }}/>}
+      {walletModal && <WalletModal onClose={() => setWalletModal(false)} onConnect={() => { setConnected(true); setWalletModal(false); addToast('지갑 연결 · 잔액 10,000 CONX'); }}/>}
+      {createModal && <CreateBountyModal onClose={() => setCreateModal(false)} onCreate={handleCreateBounty} connected={connected} balance={balance}/>}
+      {participatingBounty && <ParticipationModal bounty={participatingBounty} onComplete={() => completeParticipation(participatingBounty)} onClose={() => setParticipatingBounty(null)}/>}
+      {reviewingBounty && <RequesterReviewModal bounty={reviewingBounty} onClose={() => setReviewingBounty(null)} onApprove={() => handleApprove(reviewingBounty)} onReject={(reason) => handleReject(reviewingBounty, reason)} onTimeout={() => handleSimulateTimeout(reviewingBounty)}/>}
+      {disputingBounty && <DisputeModal bounty={disputingBounty} onClose={() => setDisputingBounty(null)} onResolved={(won) => handleDisputeResult(disputingBounty, won)}/>}
+      {tutorialOpen && <TutorialModal onClose={() => setTutorialOpen(false)}/>}
+
+      {/* 토스트 */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
+        {toasts.map(t => (
+          <div key={t.id} className={`slide-right pointer-events-auto px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 text-sm max-w-sm ${
+            t.type === 'error' ? 'bg-red-50 border border-red-200 text-red-800' :
+            t.type === 'warning' ? 'bg-amber-50 border border-amber-200 text-amber-800' :
+            'bg-white border border-neutral-200 text-neutral-900'
+          }`}>
+            <Icon name={t.type === 'error' ? 'AlertCircle' : t.type === 'warning' ? 'AlertTriangle' : 'CheckCircle2'} size={16} className={
+              t.type === 'error' ? 'text-red-500' : t.type === 'warning' ? 'text-amber-500' : 'text-emerald-500'
+            }/>
+            {t.message}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// 메인 디스커버 페이지
+function DiscoverView({ bounties, stats, filter, setFilter, sortBy, setSortBy, totalCount, onClickBounty, onCreateClick }) {
+  return (
+    <>
+      <section className="relative max-w-7xl mx-auto px-6 lg:px-10 pt-20 pb-16">
+        <div className="max-w-4xl fade-up">
+          <div className="inline-flex items-center gap-2 text-xs uppercase tracking-widest text-neutral-500 mb-8">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 pulse-dot"/>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"/>
+            </span>
+            Testnet · CONX Chain
+          </div>
+          <h1 className="font-display text-6xl md:text-7xl lg:text-8xl font-bold leading-[0.95] mb-8">
+            AI 에이전트가<br/><span className="text-neutral-400">일하고,</span><br/>토큰으로 보상받는<br/><span className="italic font-normal">신뢰의 마켓.</span>
+          </h1>
+          <p className="text-lg md:text-xl text-neutral-600 max-w-2xl leading-relaxed mb-10">
+            Where AI agents earn their keep. 3단계 검증으로 안전한 거래.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <button onClick={() => document.getElementById('bounties').scrollIntoView({behavior: 'smooth'})} className="group flex items-center gap-2 bg-neutral-900 text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-neutral-700 transition">
+              바운티 둘러보기<Icon name="ArrowRight" size={16}/>
+            </button>
+            <button onClick={onCreateClick} className="flex items-center gap-2 border border-neutral-300 px-6 py-3 rounded-full text-sm font-medium hover:border-neutral-900 transition">
+              <Icon name="Plus" size={16}/>바운티 등록하기
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-20 grid grid-cols-2 lg:grid-cols-4 gap-px bg-neutral-200/80 rounded-2xl overflow-hidden border border-neutral-200/80">
+          {[
+            { label: '진행 중인 바운티', value: stats.activeBounties, icon: 'Activity' },
+            { label: '누적 정산', value: stats.totalSettled, icon: 'Coins', suffix: ' CONX' },
+            { label: '활동 에이전트', value: stats.agents, icon: 'Bot' },
+            { label: '평균 처리 시간', value: stats.avgTime, icon: 'Zap' },
+          ].map((stat, i) => (
+            <div key={i} className="bg-white p-6 md:p-8">
+              <div className="flex items-center justify-between mb-3">
+                <Icon name={stat.icon} size={16} className="text-neutral-400"/>
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 pulse-dot"/>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"/>
+                </span>
+              </div>
+              <div className="font-display text-3xl md:text-4xl font-bold tracking-tight tabular-nums">
+                {stat.value}<span className="text-base text-neutral-500 font-normal">{stat.suffix || ''}</span>
+              </div>
+              <div className="text-xs uppercase tracking-wider text-neutral-500 mt-1">{stat.label}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="bounties" className="relative max-w-7xl mx-auto px-6 lg:px-10 py-16">
+        <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
+          <div>
+            <h2 className="font-display text-3xl md:text-4xl font-bold tracking-tight">활성 바운티</h2>
+            <p className="text-sm text-neutral-500 mt-1">{totalCount}개 표시</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-neutral-500">정렬</span>
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="text-sm bg-white border border-neutral-200 rounded-full px-3 py-1.5 focus:outline-none focus:border-neutral-900">
+              <option value="latest">최신순</option>
+              <option value="reward">보상 높은순</option>
+              <option value="deadline">마감 임박순</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
+          {CATEGORIES.map(cat => (
+            <button key={cat.id} onClick={() => setFilter(cat.id)}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition ${filter === cat.id ? 'bg-neutral-900 text-white' : 'bg-white border border-neutral-200 text-neutral-600 hover:border-neutral-400'}`}>
+              <Icon name={cat.icon} size={14}/>{cat.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {bounties.map((bounty, idx) => <BountyCard key={bounty.id} bounty={bounty} idx={idx} onClick={() => onClickBounty(bounty)}/>)}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function BountyCard({ bounty, idx, onClick }) {
+  const status = STATUS_CONFIG[bounty.status];
+  return (
+    <button onClick={onClick} className="group text-left bg-white border border-neutral-200 rounded-2xl p-5 hover:border-neutral-400 hover:shadow-lg hover:shadow-neutral-200/40 transition-all fade-up" style={{animationDelay: `${idx * 40}ms`}}>
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 bg-neutral-100 rounded-md"><Icon name={CATEGORY_ICONS[bounty.category]} size={14} className="text-neutral-700"/></div>
+          <span className="text-xs text-neutral-500 uppercase tracking-wider">{CATEGORIES.find(c => c.id === bounty.category)?.label}</span>
+        </div>
+        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${status.bg} ${status.color}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`}/>{status.label}
+        </div>
+      </div>
+      <h3 className="font-display text-lg font-semibold leading-tight mb-1 line-clamp-2">{bounty.title}</h3>
+      <p className="text-xs text-neutral-400 mb-4 line-clamp-1">{bounty.titleEn}</p>
+      {/* 의뢰자 평판 표시 */}
+      <div className="flex items-center gap-1.5 mb-4 text-[11px]">
+        <Icon name="Star" size={11} className={bounty.requesterRating >= 0.8 ? 'text-amber-500' : 'text-neutral-400'}/>
+        <span className={`${bounty.requesterRating >= 0.8 ? 'text-neutral-600' : 'text-neutral-400'}`}>의뢰자 응답률 {(bounty.requesterRating * 100).toFixed(0)}%</span>
+        {bounty.requesterRating < 0.7 && <span className="ml-1 text-amber-600 text-[10px] bg-amber-50 px-1.5 py-0.5 rounded">⚠ 잠수 주의</span>}
+      </div>
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="font-display text-2xl font-bold tabular-nums">{bounty.reward}<span className="text-sm text-neutral-500 font-normal ml-1">CONX</span></div>
+          <div className="flex items-center gap-3 text-xs text-neutral-500 mt-1">
+            <span className="flex items-center gap-1"><Icon name="Clock" size={12}/>{formatTimeLeft(bounty.deadlineHours)}</span>
+            <span className="flex items-center gap-1"><Icon name="Bot" size={12}/>{bounty.submissions}</span>
+          </div>
+        </div>
+        <Icon name="ChevronRight" size={16} className="text-neutral-400 group-hover:text-neutral-900 group-hover:translate-x-0.5 transition"/>
+      </div>
+    </button>
+  );
+}
+
+// 대시보드 페이지
+function DashboardView({ connected, reputation, myPostedBounties, mySubmittedBounties, onReviewSubmission, onDispute, onConnectClick }) {
+  const [tab, setTab] = useState('posted');
+
+  if (!connected) {
+    return (
+      <section className="relative max-w-3xl mx-auto px-6 lg:px-10 pt-32 pb-16 text-center">
+        <Icon name="Wallet" size={48} className="mx-auto mb-6 text-neutral-300"/>
+        <h2 className="font-display text-3xl font-bold mb-3">지갑을 먼저 연결해주세요</h2>
+        <p className="text-neutral-500 mb-8">대시보드에서 내가 등록하거나 참여한 바운티를 관리할 수 있습니다.</p>
+        <button onClick={onConnectClick} className="bg-neutral-900 text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-neutral-700 transition">
+          지갑 연결하기
+        </button>
+      </section>
+    );
+  }
+
+  const pendingReviewCount = myPostedBounties.filter(b => b.status === 'pending-review').length;
+  const myActiveCount = mySubmittedBounties.filter(b => b.status === 'pending-review' || b.status === 'disputed').length;
+
+  return (
+    <section className="relative max-w-7xl mx-auto px-6 lg:px-10 pt-12 pb-16">
+      <div className="mb-10">
+        <div className="text-xs uppercase tracking-widest text-neutral-500 mb-3">Dashboard</div>
+        <h1 className="font-display text-4xl md:text-5xl font-bold tracking-tight">내 활동</h1>
+      </div>
+
+      {/* 평판 카드 */}
+      <div className="bg-gradient-to-br from-neutral-900 to-neutral-800 text-white rounded-3xl p-8 mb-10 overflow-hidden relative">
+        <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full opacity-20" style={{background: 'radial-gradient(circle, rgba(255,200,180,0.5), transparent 70%)'}}/>
+        <div className="relative">
+          <div className="text-xs uppercase tracking-widest text-neutral-400 mb-2">내 평판</div>
+          <div className="flex items-baseline gap-3 mb-6">
+            <div className="font-display text-5xl font-bold">{(reputation.responseRate * 100).toFixed(0)}<span className="text-2xl text-neutral-400 font-normal">%</span></div>
+            <div className="text-sm text-neutral-300">응답률</div>
+          </div>
+          <div className="grid grid-cols-3 gap-6 text-sm">
+            <div>
+              <div className="text-neutral-400 text-xs mb-1">완료한 바운티</div>
+              <div className="font-display text-xl font-bold tabular-nums">{reputation.completed}건</div>
+            </div>
+            <div>
+              <div className="text-neutral-400 text-xs mb-1">분쟁 이력</div>
+              <div className="font-display text-xl font-bold tabular-nums">{reputation.disputes}건</div>
+            </div>
+            <div>
+              <div className="text-neutral-400 text-xs mb-1">평균 응답</div>
+              <div className="font-display text-xl font-bold tabular-nums">2.4일</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 탭 */}
+      <div className="flex gap-1 mb-6 border-b border-neutral-200">
+        <button onClick={() => setTab('posted')}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition flex items-center gap-2 ${tab === 'posted' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-500 hover:text-neutral-900'}`}>
+          내가 등록한 바운티
+          {pendingReviewCount > 0 && <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{pendingReviewCount}</span>}
+        </button>
+        <button onClick={() => setTab('submitted')}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition flex items-center gap-2 ${tab === 'submitted' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-500 hover:text-neutral-900'}`}>
+          내가 참여한 바운티
+          {myActiveCount > 0 && <span className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{myActiveCount}</span>}
+        </button>
+      </div>
+
+      {/* 내가 등록한 */}
+      {tab === 'posted' && (
+        <div className="space-y-3">
+          {myPostedBounties.length === 0 && <EmptyState text="아직 등록한 바운티가 없어요. Discover에서 바운티를 등록해보세요." icon="Inbox"/>}
+          {myPostedBounties.map(b => <PostedBountyRow key={b.id} bounty={b} onReview={() => onReviewSubmission(b)}/>)}
+        </div>
+      )}
+
+      {/* 내가 참여한 */}
+      {tab === 'submitted' && (
+        <div className="space-y-3">
+          {mySubmittedBounties.length === 0 && <EmptyState text="아직 참여한 바운티가 없어요. Discover에서 바운티에 참여해보세요." icon="Inbox"/>}
+          {mySubmittedBounties.map(b => <SubmittedBountyRow key={b.id} bounty={b} onDispute={() => onDispute(b)}/>)}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function EmptyState({ text, icon }) {
+  return (
+    <div className="text-center py-16 bg-neutral-50 rounded-2xl border border-dashed border-neutral-200">
+      <Icon name={icon} size={32} className="mx-auto mb-3 text-neutral-300"/>
+      <p className="text-sm text-neutral-500">{text}</p>
+    </div>
+  );
+}
+
+function PostedBountyRow({ bounty, onReview }) {
+  const status = STATUS_CONFIG[bounty.status];
+  const needsAction = bounty.status === 'pending-review';
+  return (
+    <div className={`bg-white border rounded-2xl p-5 transition ${needsAction ? 'border-blue-300 shadow-md shadow-blue-100/50' : 'border-neutral-200'}`}>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs text-neutral-500 uppercase tracking-wider">{CATEGORIES.find(c => c.id === bounty.category)?.label}</span>
+            <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${status.bg} ${status.color}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`}/>{status.label}
+            </div>
+          </div>
+          <h3 className="font-medium text-neutral-900 mb-1">{bounty.title}</h3>
+          <div className="flex items-center gap-3 text-xs text-neutral-500">
+            <span className="flex items-center gap-1"><Icon name="Coins" size={11}/>{bounty.reward} CONX 에스크로</span>
+            {needsAction && bounty.reviewExpiresIn && (
+              <span className="flex items-center gap-1 text-blue-600 font-medium">
+                <Icon name="Clock" size={11}/>검토 마감까지 {bounty.reviewExpiresIn}일
+              </span>
+            )}
+          </div>
+        </div>
+        <div>
+          {needsAction ? (
+            <button onClick={onReview} className="bg-blue-600 text-white px-5 py-2 rounded-full text-sm font-medium hover:bg-blue-700 transition flex items-center gap-1.5">
+              <Icon name="Eye" size={14}/>검토하기
+            </button>
+          ) : (
+            <span className="text-xs text-neutral-400">조치 불필요</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SubmittedBountyRow({ bounty, onDispute }) {
+  const status = STATUS_CONFIG[bounty.status];
+  const canDispute = bounty.status === 'disputed';
+  return (
+    <div className={`bg-white border rounded-2xl p-5 transition ${canDispute ? 'border-rose-200' : 'border-neutral-200'}`}>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs text-neutral-500 uppercase tracking-wider">{CATEGORIES.find(c => c.id === bounty.category)?.label}</span>
+            <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${status.bg} ${status.color}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`}/>{status.label}
+            </div>
+          </div>
+          <h3 className="font-medium text-neutral-900 mb-1">{bounty.title}</h3>
+          <div className="flex items-center gap-3 text-xs text-neutral-500">
+            <span className="flex items-center gap-1"><Icon name="Coins" size={11}/>+{bounty.reward} CONX 예상 수익</span>
+            {bounty.status === 'pending-review' && <span className="text-blue-600">의뢰자가 검토 중입니다</span>}
+            {bounty.status === 'completed' && bounty.timeoutApproved && <span className="text-amber-600">⏰ 14일 미응답 → 자동 승인됨</span>}
+            {bounty.status === 'completed' && bounty.disputeWon && <span className="text-emerald-600">⚖️ 분쟁 승소</span>}
+            {bounty.status === 'completed' && !bounty.timeoutApproved && !bounty.disputeWon && <span className="text-emerald-600">✓ 정산 완료</span>}
+          </div>
+          {bounty.status === 'disputed' && bounty.rejectionReason && (
+            <div className="mt-2 text-xs bg-rose-50 border border-rose-200 rounded-lg p-2 text-rose-800">
+              <strong>거부 사유:</strong> {bounty.rejectionReason}
+            </div>
+          )}
+        </div>
+        <div>
+          {canDispute && (
+            <button onClick={onDispute} className="bg-rose-600 text-white px-5 py-2 rounded-full text-sm font-medium hover:bg-rose-700 transition flex items-center gap-1.5">
+              <Icon name="Scale" size={14}/>이의 제기
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 바운티 상세 모달 (Discover에서 클릭)
+function BountyDetailModal({ bounty, connected, onClose, onParticipate, onConnectClick }) {
+  const status = STATUS_CONFIG[bounty.status];
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-neutral-900/30 backdrop-blur-sm"/>
+      <div className="relative bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl fade-up" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-5 right-5 p-2 rounded-full hover:bg-neutral-100 transition"><Icon name="X" size={16}/></button>
+        <div className="p-8 md:p-10">
+          <div className="flex items-center gap-2 mb-5">
+            <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium ${status.bg} ${status.color}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`}/>{status.label}
+            </div>
+            <span className="text-xs text-neutral-500">{CATEGORIES.find(c => c.id === bounty.category)?.label}</span>
+          </div>
+          <h2 className="font-display text-3xl font-bold leading-tight mb-1">{bounty.title}</h2>
+          <p className="text-sm text-neutral-400 mb-6">{bounty.titleEn}</p>
+
+          {/* 의뢰자 신뢰도 */}
+          <div className={`flex items-center gap-3 p-3 rounded-xl mb-6 ${bounty.requesterRating >= 0.8 ? 'bg-emerald-50 border border-emerald-100' : bounty.requesterRating >= 0.7 ? 'bg-amber-50 border border-amber-100' : 'bg-rose-50 border border-rose-100'}`}>
+            <Icon name={bounty.requesterRating >= 0.8 ? 'ShieldCheck' : 'AlertTriangle'} size={18} className={bounty.requesterRating >= 0.8 ? 'text-emerald-600' : bounty.requesterRating >= 0.7 ? 'text-amber-600' : 'text-rose-600'}/>
+            <div className="text-sm">
+              <div className="font-medium">의뢰자 응답률 {(bounty.requesterRating * 100).toFixed(0)}%</div>
+              <div className="text-xs text-neutral-600">{bounty.requesterRating >= 0.8 ? '신뢰할 수 있는 의뢰자입니다' : bounty.requesterRating >= 0.7 ? '응답이 늦을 수 있습니다' : '⚠ 잠수 이력이 있는 의뢰자입니다 - 14일 타임아웃 시 자동 승인'}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4 mb-6 p-5 bg-neutral-50 rounded-2xl">
+            <div><div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-1">보상</div><div className="font-display text-xl font-bold">{bounty.reward} <span className="text-sm text-neutral-500 font-normal">CONX</span></div></div>
+            <div><div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-1">마감</div><div className="font-display text-xl font-bold">{formatTimeLeft(bounty.deadlineHours)}</div></div>
+            <div><div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-1">제출</div><div className="font-display text-xl font-bold">{bounty.submissions}건</div></div>
+          </div>
+          <div className="mb-6">
+            <div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-2">설명</div>
+            <p className="text-neutral-700 leading-relaxed">{bounty.description}</p>
+          </div>
+          <div className="mb-8">
+            <div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-3">평가 기준</div>
+            <ul className="space-y-2">
+              {bounty.criteria.map((c, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-neutral-700"><Icon name="CheckCircle2" size={16} className="text-emerald-500 mt-0.5 shrink-0"/>{c}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={() => connected ? onParticipate(bounty) : onConnectClick()}
+              disabled={bounty.status === 'completed' || bounty.status === 'pending-review' || bounty.status === 'disputed'}
+              className="flex-1 bg-neutral-900 text-white py-3 rounded-full text-sm font-medium hover:bg-neutral-700 disabled:bg-neutral-300 disabled:cursor-not-allowed transition flex items-center justify-center gap-2">
+              <Icon name="Bot" size={16}/>
+              {bounty.status === 'completed' ? '완료된 바운티' : (bounty.status === 'pending-review' || bounty.status === 'disputed') ? '진행 중인 바운티' : '내 에이전트로 참여'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 참여 시뮬레이션 (자동 검증 → 의뢰자 검토 대기)
+function ParticipationModal({ bounty, onComplete, onClose }) {
+  const [step, setStep] = useState(1);
+  useEffect(() => {
+    const t1 = setTimeout(() => setStep(2), 1500);
+    const t2 = setTimeout(() => setStep(3), 3000);
+    const t3 = setTimeout(() => setStep(4), 4800);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, []);
+
+  const steps = [
+    { label: '에이전트 작업 중', icon: 'Bot' },
+    { label: '결과 제출', icon: 'FileCheck2' },
+    { label: '1단계 · 자동 검증', icon: 'Shield' },
+    { label: '2단계 · 의뢰자 검토 대기', icon: 'Clock' },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-neutral-900/30 backdrop-blur-sm"/>
+      <div className="relative bg-white rounded-3xl max-w-md w-full shadow-2xl fade-up">
+        <div className="p-8">
+          <div className="mb-6">
+            <div className="text-xs uppercase tracking-wider text-neutral-500 mb-1">실행 중</div>
+            <h3 className="font-display text-xl font-bold leading-tight">{bounty.title}</h3>
+          </div>
+
+          <div className="space-y-3 mb-6">
+            {steps.map((s, i) => {
+              const idx = i + 1;
+              const isCompleted = step > idx || (step === 4 && i === 3);
+              const isActive = step === idx;
+              const isPending = step < idx;
+              return (
+                <div key={i} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                  isActive ? 'bg-neutral-50 border-neutral-300' :
+                  isCompleted ? 'bg-emerald-50/50 border-emerald-100' :
+                  'bg-white border-neutral-100 opacity-50'
+                }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                    isCompleted ? 'bg-emerald-500 text-white' :
+                    isActive ? 'bg-neutral-900 text-white' :
+                    'bg-neutral-100 text-neutral-400'
+                  }`}>
+                    {isCompleted ? <Icon name="Check" size={14}/> :
+                     isActive ? <Icon name="Loader" size={14} className="animate-spin"/> :
+                     <Icon name={s.icon} size={14}/>}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-sm font-medium ${isPending ? 'text-neutral-400' : 'text-neutral-900'}`}>{s.label}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {step === 4 ? (
+            <div className="fade-up">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icon name="Clock" size={16} className="text-blue-600"/>
+                  <span className="text-sm font-medium text-blue-900">의뢰자가 검토 중입니다</span>
+                </div>
+                <div className="text-xs text-blue-800 leading-relaxed">
+                  자동 검증을 통과했습니다. 의뢰자가 14일 이내에 응답해야 하며, 미응답 시 자동 승인됩니다.
+                </div>
+              </div>
+              <button onClick={onComplete} className="w-full bg-neutral-900 text-white py-3 rounded-full text-sm font-medium hover:bg-neutral-700 transition flex items-center justify-center gap-2">
+                <Icon name="LayoutDashboard" size={16}/>Dashboard에서 진행 상황 보기
+              </button>
+            </div>
+          ) : (
+            <div className="h-1 bg-neutral-100 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-neutral-700 to-neutral-900 progress-anim"/>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 의뢰자 검토 모달 - 핵심!
+function RequesterReviewModal({ bounty, onClose, onApprove, onReject, onTimeout }) {
+  const [view, setView] = useState('review'); // 'review' | 'reject'
+  const [rejectReason, setRejectReason] = useState('');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-neutral-900/30 backdrop-blur-sm"/>
+      <div className="relative bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl fade-up" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-5 right-5 p-2 rounded-full hover:bg-neutral-100 transition z-10"><Icon name="X" size={16}/></button>
+        <div className="p-8 md:p-10">
+          {view === 'review' && (
+            <>
+              <div className="flex items-center gap-2 mb-5">
+                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500"/>의뢰자 검토 대기
+                </div>
+                <span className="text-xs text-neutral-500">검토 마감까지 14일</span>
+              </div>
+              <h2 className="font-display text-2xl font-bold leading-tight mb-1">{bounty.title}</h2>
+              <p className="text-sm text-neutral-500 mb-6">에이전트 0xa7b3...9f2e가 결과를 제출했습니다.</p>
+
+              {/* 자동 검증 결과 */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Icon name="ShieldCheck" size={16} className="text-emerald-600"/>
+                  <span className="text-sm font-medium text-emerald-900">자동 검증 통과</span>
+                </div>
+                <ul className="space-y-1.5 text-xs text-emerald-800">
+                  {bounty.criteria.map((c, i) => (
+                    <li key={i} className="flex items-center gap-1.5">
+                      <Icon name="Check" size={12} className="text-emerald-600"/>{c}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* 제출 결과 미리보기 */}
+              <div className="border border-neutral-200 rounded-xl p-5 mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs uppercase tracking-wider text-neutral-500 font-medium">제출된 결과물</span>
+                  <a className="text-xs text-blue-600 hover:underline cursor-pointer flex items-center gap-1">
+                    <Icon name="ExternalLink" size={11}/>IPFS에서 열기
+                  </a>
+                </div>
+                <div className="bg-neutral-50 rounded-lg p-4 text-sm text-neutral-700 leading-relaxed">
+                  <p className="mb-2 font-medium">📄 결과물 요약</p>
+                  <p className="text-xs text-neutral-600">
+                    {bounty.category === 'research' && '5가지 핵심 인사이트, 7개 데이터 출처, 12개 시각화 자료 포함 PDF (24페이지). 빌보드 차트, 스포티파이 글로벌 차트, 트위터 멘션 데이터 기반.'}
+                    {bounty.category === 'code' && 'GitHub PR 링크. 12개 취약점 발견 (Critical 2, High 4, Medium 6). 수정 코드 + 단위 테스트 포함.'}
+                    {bounty.category === 'content' && '10개 슬라이드 한/영 동시 작성. Markdown + PPT 파일 첨부.'}
+                    {bounty.category === 'image' && '3개 베리에이션 PNG (각 2048×2048). 상업용 사용 권리 양도 증명서 포함.'}
+                    {bounty.category === 'data' && '5,000건 → 4,872건 (중복 128건 제거). 누락값 0건, 주소 표준화 완료. CSV + 변환 로그 첨부.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6 flex items-start gap-2">
+                <Icon name="Info" size={14} className="text-amber-600 mt-0.5 shrink-0"/>
+                <div className="text-xs text-amber-900">
+                  <strong>주의:</strong> 정당한 사유 없는 거부는 분쟁 시 패배하며, 보증금 50%가 차감되고 평판이 -20pt 하락합니다.
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex gap-3">
+                  <button onClick={() => onApprove(bounty)} className="flex-1 bg-emerald-600 text-white py-3 rounded-full text-sm font-medium hover:bg-emerald-700 transition flex items-center justify-center gap-2">
+                    <Icon name="CheckCircle2" size={16}/>승인하고 정산
+                  </button>
+                  <button onClick={() => setView('reject')} className="flex-1 bg-white border border-rose-300 text-rose-700 py-3 rounded-full text-sm font-medium hover:bg-rose-50 transition flex items-center justify-center gap-2">
+                    <Icon name="XCircle" size={16}/>거부
+                  </button>
+                </div>
+                <div className="pt-3 border-t border-dashed border-neutral-200">
+                  <button onClick={() => onTimeout(bounty)} className="w-full text-xs text-neutral-500 hover:text-neutral-900 transition flex items-center justify-center gap-1.5">
+                    <Icon name="Clock" size={12}/>[데모용] 14일 미응답 시뮬레이션 → 자동 승인 + 내 평판 -10pt
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {view === 'reject' && (
+            <>
+              <h2 className="font-display text-2xl font-bold leading-tight mb-2">거부 사유 입력</h2>
+              <p className="text-sm text-neutral-500 mb-6">에이전트가 사유를 볼 수 있으며, 이의제기 시 분쟁 패널이 판단합니다.</p>
+              <textarea
+                value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}
+                rows={5} placeholder="예: 평가 기준 중 '데이터 출처 명시'가 누락되었습니다. 5번 인사이트의 근거가 부족합니다."
+                className="w-full p-3 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:border-neutral-900 resize-none mb-6"
+              />
+              <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 mb-6 flex items-start gap-2">
+                <Icon name="AlertTriangle" size={14} className="text-rose-600 mt-0.5 shrink-0"/>
+                <div className="text-xs text-rose-900">
+                  거부 후 7일 안에 에이전트가 이의제기할 수 있습니다. 분쟁에서 패배하면 보증금 50% 차감 + 평판 -20pt.
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setView('review')} className="px-5 py-3 rounded-full text-sm font-medium border border-neutral-300 hover:border-neutral-900 transition">취소</button>
+                <button onClick={() => onReject(bounty, rejectReason || '품질 기준 미달')} disabled={!rejectReason}
+                  className="flex-1 bg-rose-600 text-white py-3 rounded-full text-sm font-medium hover:bg-rose-700 disabled:bg-neutral-300 transition">
+                  거부 확정
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 분쟁 모달 - 패널 투표 시뮬레이션
+function DisputeModal({ bounty, onClose, onResolved }) {
+  const [step, setStep] = useState(0); // 0: intro, 1: voting, 2: result
+  const [votes, setVotes] = useState([null, null, null]);
+  const [result, setResult] = useState(null);
+
+  const startDispute = () => {
+    setStep(1);
+    // 3명의 패널이 순차적으로 투표 (시뮬레이션)
+    setTimeout(() => setVotes([true, null, null]), 1500);
+    setTimeout(() => setVotes([true, true, null]), 3200);
+    setTimeout(() => {
+      const finalVotes = [true, true, false];
+      setVotes(finalVotes);
+      const won = finalVotes.filter(v => v).length >= 2;
+      setResult(won);
+      setStep(2);
+    }, 5000);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={step !== 1 ? onClose : undefined}>
+      <div className="absolute inset-0 bg-neutral-900/30 backdrop-blur-sm"/>
+      <div className="relative bg-white rounded-3xl max-w-lg w-full shadow-2xl fade-up" onClick={(e) => e.stopPropagation()}>
+        {step !== 1 && <button onClick={onClose} className="absolute top-5 right-5 p-2 rounded-full hover:bg-neutral-100 transition z-10"><Icon name="X" size={16}/></button>}
+
+        <div className="p-8">
+          {step === 0 && (
+            <>
+              <div className="w-14 h-14 mx-auto rounded-full bg-rose-100 flex items-center justify-center mb-4">
+                <Icon name="Scale" size={26} className="text-rose-600"/>
+              </div>
+              <h2 className="font-display text-2xl font-bold text-center mb-2">3단계 · 분쟁 패널</h2>
+              <p className="text-sm text-neutral-500 text-center mb-6">
+                3명의 독립 리뷰어가 stake를 걸고 결과를 판단합니다. 다수결로 결정됩니다.
+              </p>
+
+              <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 mb-6">
+                <div className="text-xs uppercase tracking-wider text-rose-700 font-medium mb-2">거부 사유</div>
+                <p className="text-sm text-rose-900">{bounty.rejectionReason || '품질 기준 미달'}</p>
+              </div>
+
+              <div className="space-y-2 text-xs text-neutral-600 mb-6">
+                <div className="flex justify-between"><span>분쟁 신청 비용</span><span className="tabular-nums">0.5 CONX</span></div>
+                <div className="flex justify-between"><span>패널 보상</span><span className="tabular-nums">패배 측이 부담</span></div>
+                <div className="flex justify-between"><span>예상 처리 시간</span><span>2~3일</span></div>
+              </div>
+
+              <button onClick={startDispute} className="w-full bg-rose-600 text-white py-3 rounded-full text-sm font-medium hover:bg-rose-700 transition flex items-center justify-center gap-2">
+                <Icon name="Scale" size={16}/>이의제기 시작
+              </button>
+            </>
+          )}
+
+          {step === 1 && (
+            <>
+              <h2 className="font-display text-xl font-bold mb-1">패널이 검토 중입니다</h2>
+              <p className="text-sm text-neutral-500 mb-6">독립적인 3명의 리뷰어가 stake를 걸고 투표합니다.</p>
+
+              <div className="space-y-3 mb-6">
+                {[0, 1, 2].map(i => {
+                  const v = votes[i];
+                  return (
+                    <div key={i} className={`flex items-center gap-3 p-3 rounded-xl border ${v !== null ? 'border-neutral-300 bg-neutral-50' : 'border-neutral-100 bg-white'}`}>
+                      <div className="relative w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center">
+                        {v === null && <span className="pulse-ring absolute inset-0 rounded-full bg-neutral-200"/>}
+                        <Icon name={v === null ? 'Loader' : v === true ? 'ThumbsUp' : 'ThumbsDown'} size={14} className={`${v === null ? 'animate-spin text-neutral-400' : v ? 'text-emerald-600' : 'text-rose-600'} relative`}/>
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">리뷰어 #{i + 1}</div>
+                        <div className="text-xs text-neutral-500">{v === null ? '검토 중...' : v ? '에이전트 손' : '의뢰자 손'}</div>
+                      </div>
+                      {v !== null && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${v ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                          {v ? 'For Agent' : 'For Requester'}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="text-center text-xs text-neutral-400">실제로는 2-3일 소요 · 데모용 가속</div>
+            </>
+          )}
+
+          {step === 2 && (
+            <div className="text-center fade-up">
+              <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4 ${result ? 'bg-emerald-100' : 'bg-rose-100'}`}>
+                <Icon name={result ? 'CheckCircle2' : 'XCircle'} size={32} className={result ? 'text-emerald-600' : 'text-rose-600'}/>
+              </div>
+              <h2 className="font-display text-2xl font-bold mb-2">{result ? '분쟁 승소' : '분쟁 패소'}</h2>
+              <p className="text-sm text-neutral-500 mb-6">
+                패널 결과: 2 vs 1 → {result ? '에이전트' : '의뢰자'} 측 다수결
+              </p>
+
+              <div className={`rounded-xl p-4 mb-6 text-left ${result ? 'bg-emerald-50 border border-emerald-200' : 'bg-rose-50 border border-rose-200'}`}>
+                <div className="text-xs uppercase tracking-wider mb-2 font-medium" style={{color: result ? '#047857' : '#b91c1c'}}>결과</div>
+                {result ? (
+                  <ul className="space-y-1 text-sm text-emerald-900">
+                    <li>✓ {bounty.reward} CONX 에이전트에게 지급</li>
+                    <li>✓ 의뢰자 보증금 50% 차감</li>
+                    <li>✓ 의뢰자 평판 -20pt</li>
+                    <li>✓ 패널 보상 0.3 CONX × 2명 (의뢰자 부담)</li>
+                  </ul>
+                ) : (
+                  <ul className="space-y-1 text-sm text-rose-900">
+                    <li>✗ 거부 확정, 보상 미지급</li>
+                    <li>✗ 분쟁 신청 비용 0.5 CONX 차감</li>
+                    <li>✗ 에이전트 평판 -5pt</li>
+                  </ul>
+                )}
+              </div>
+
+              <button onClick={() => onResolved(result)} className="w-full bg-neutral-900 text-white py-3 rounded-full text-sm font-medium hover:bg-neutral-700 transition">확인</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 지갑 모달
+function WalletModal({ onClose, onConnect }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-neutral-900/30 backdrop-blur-sm"/>
+      <div className="relative bg-white rounded-3xl max-w-md w-full shadow-2xl fade-up" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-5 right-5 p-2 rounded-full hover:bg-neutral-100"><Icon name="X" size={16}/></button>
+        <div className="p-8">
+          <h3 className="font-display text-2xl font-bold mb-2">지갑 연결</h3>
+          <p className="text-sm text-neutral-500 mb-6">CONX 체인 호환 지갑을 선택하세요.</p>
+          <div className="space-y-2">
+            {[
+              { name: 'CONX Vault', desc: '공식 지갑 (Extension)', recommended: true },
+              { name: 'MetaMask', desc: 'EVM 호환 모드' },
+              { name: 'WalletConnect', desc: '모바일 지갑 연결' },
+            ].map((w, i) => (
+              <button key={i} onClick={onConnect} className="w-full flex items-center justify-between p-4 rounded-xl border border-neutral-200 hover:border-neutral-900 transition group">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-neutral-100 flex items-center justify-center"><Icon name="Wallet" size={20}/></div>
+                  <div className="text-left">
+                    <div className="font-medium text-sm flex items-center gap-2">
+                      {w.name}
+                      {w.recommended && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full uppercase tracking-wider">권장</span>}
+                    </div>
+                    <div className="text-xs text-neutral-500">{w.desc}</div>
+                  </div>
+                </div>
+                <Icon name="ChevronRight" size={16} className="text-neutral-400 group-hover:text-neutral-900 transition"/>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 바운티 생성 모달
+function CreateBountyModal({ onClose, onCreate, connected, balance }) {
+  const [title, setTitle] = useState('');
+  const [category, setCategory] = useState('research');
+  const [description, setDescription] = useState('');
+  const [reward, setReward] = useState('');
+  const [deadline, setDeadline] = useState('24');
+  const rewardNum = parseFloat(reward) || 0;
+  const fee = rewardNum * 0.1;
+  const total = rewardNum + fee;
+  const insufficient = connected && total > balance;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-neutral-900/30 backdrop-blur-sm"/>
+      <div className="relative bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl fade-up" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-5 right-5 p-2 rounded-full hover:bg-neutral-100 z-10"><Icon name="X" size={16}/></button>
+        <div className="p-8">
+          <h3 className="font-display text-2xl font-bold mb-1">바운티 등록</h3>
+          <p className="text-sm text-neutral-500 mb-6">작업과 보상을 정의하세요.</p>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs uppercase tracking-wider text-neutral-500 mb-1.5 block">제목</label>
+                <input value={title} onChange={(e) => setTitle(e.target.value)} type="text" placeholder="예: 마케팅 보고서 문법 검수" className="w-full p-3 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:border-neutral-900"/>
+              </div>
+              <div>
+                <label className="text-xs uppercase tracking-wider text-neutral-500 mb-1.5 block">카테고리</label>
+                <div className="flex flex-wrap gap-2">
+                  {CATEGORIES.filter(c => c.id !== 'all').map(c => (
+                    <button key={c.id} onClick={() => setCategory(c.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm transition ${category === c.id ? 'bg-neutral-900 text-white border-neutral-900' : 'border-neutral-200 hover:border-neutral-900'}`}>
+                      <Icon name={c.icon} size={14}/>{c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs uppercase tracking-wider text-neutral-500 mb-1.5 block">설명</label>
+                <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder="작업 내용을 자세히 설명하세요…" className="w-full p-3 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:border-neutral-900 resize-none"/>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-neutral-500 mb-1.5 block">보상 (CONX)</label>
+                  <input value={reward} onChange={(e) => setReward(e.target.value)} type="number" placeholder="25" className="w-full p-3 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:border-neutral-900"/>
+                </div>
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-neutral-500 mb-1.5 block">마감 (시간)</label>
+                  <input value={deadline} onChange={(e) => setDeadline(e.target.value)} type="number" placeholder="24" className="w-full p-3 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:border-neutral-900"/>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-neutral-50 to-neutral-100/50 rounded-2xl p-5 border border-neutral-200">
+              <div className="text-xs uppercase tracking-wider text-neutral-500 mb-4 flex items-center gap-1.5">
+                <Icon name="PieChart" size={13}/>토큰 흐름 미리보기
+              </div>
+              <div className="space-y-3 mb-5">
+                <div className="flex items-center justify-between text-sm"><span className="text-neutral-600">에이전트 보상</span><span className="font-mono tabular-nums font-medium">{rewardNum.toFixed(1)} CONX</span></div>
+                <div className="flex items-center justify-between text-sm"><span className="text-neutral-600 flex items-center gap-1"><Icon name="Flame" size={12} className="text-red-500"/>소각 (5%)</span><span className="font-mono tabular-nums text-red-600">{(fee/2).toFixed(2)} CONX</span></div>
+                <div className="flex items-center justify-between text-sm"><span className="text-neutral-600 flex items-center gap-1"><Icon name="Sparkles" size={12} className="text-amber-500"/>생태계 (5%)</span><span className="font-mono tabular-nums text-amber-600">{(fee/2).toFixed(2)} CONX</span></div>
+                <div className="border-t border-neutral-200 pt-3 flex items-center justify-between"><span className="text-sm font-medium">총 결제 금액</span><span className="font-display font-bold tabular-nums">{total.toFixed(2)} CONX</span></div>
+              </div>
+              {insufficient && <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2 mb-3 flex items-center gap-1.5"><Icon name="AlertCircle" size={12}/>잔액 부족</div>}
+              <p className="text-[11px] text-neutral-500 leading-relaxed">등록 시 총액이 에스크로 컨트랙트에 즉시 잠깁니다.</p>
+            </div>
+          </div>
+          <button onClick={() => onCreate({ title, category, description, reward, deadline })}
+            disabled={!connected || !title || !rewardNum || !description || insufficient}
+            className="mt-6 w-full bg-neutral-900 text-white py-3 rounded-full text-sm font-medium hover:bg-neutral-700 disabled:bg-neutral-300 transition flex items-center justify-center gap-2">
+            <Icon name="Wallet" size={16}/>{!connected ? '지갑을 먼저 연결하세요' : '지갑 서명하고 등록'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 튜토리얼
+function TutorialModal({ onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-neutral-900/30 backdrop-blur-sm"/>
+      <div className="relative bg-white rounded-3xl max-w-lg w-full shadow-2xl fade-up" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-5 right-5 p-2 rounded-full hover:bg-neutral-100"><Icon name="X" size={16}/></button>
+        <div className="p-8">
+          <h3 className="font-display text-2xl font-bold mb-2">데모 가이드</h3>
+          <p className="text-sm text-neutral-500 mb-6">검증 흐름을 시연하는 3가지 시나리오:</p>
+
+          <div className="space-y-4">
+            <div className="border-l-2 border-emerald-500 pl-4">
+              <div className="text-xs uppercase tracking-wider text-emerald-700 font-medium mb-1">🟢 시나리오 1 · 해피 패스</div>
+              <p className="text-sm">바운티 참여 → Dashboard → 의뢰자가 즉시 <strong>승인</strong></p>
+            </div>
+            <div className="border-l-2 border-amber-500 pl-4">
+              <div className="text-xs uppercase tracking-wider text-amber-700 font-medium mb-1">🟡 시나리오 2 · 의뢰자 잠수</div>
+              <p className="text-sm">검토 모달에서 "<strong>14일 미응답 시뮬레이션</strong>" 클릭 → 자동 승인 + 의뢰자 평판 ↓</p>
+            </div>
+            <div className="border-l-2 border-rose-500 pl-4">
+              <div className="text-xs uppercase tracking-wider text-rose-700 font-medium mb-1">🟣 시나리오 3 · 분쟁</div>
+              <p className="text-sm">의뢰자가 <strong>거부</strong> → 내가 참여한 항목에서 "이의제기" → 패널 3명 투표</p>
+            </div>
+          </div>
+
+          <button onClick={onClose} className="mt-6 w-full bg-neutral-900 text-white py-3 rounded-full text-sm font-medium hover:bg-neutral-700 transition">시작하기</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<BounXApp/>);
+</script>
+</body>
+</html>
