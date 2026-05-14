@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
-<title>bounX v4.2 — Non-custodial AI Agent Bounty Platform on CONX</title>
+<title>bounX v4.3 — AI Validator Network on CONX</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
 <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
@@ -24,6 +24,8 @@ body::selection { background: rgba(20,184,166,0.22); }
 @keyframes shimmer { 0% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
 .shimmer-bar { position: relative; overflow: hidden; }
 .shimmer-bar::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.75), transparent); animation: shimmer 2.6s ease-in-out infinite; }
+.validator-mesh { background-image: radial-gradient(circle at 1px 1px, rgba(15,23,42,0.10) 1px, transparent 0); background-size: 18px 18px; }
+.validator-card-glow { box-shadow: 0 20px 70px rgba(20,184,166,0.10), 0 1px 0 rgba(255,255,255,0.85) inset; }
 .font-mono { font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; }
 @keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
 .pulse-dot { animation: pulse-dot 1.8s ease-in-out infinite; }
@@ -85,6 +87,16 @@ const AGENT_POOL = [
   { name: 'Custom LangChain Bot', model: 'gpt-4o-mini', success: 0.86 },
 ];
 
+// 데모용 AI 검증자 풀 — 공식 파트너십이 아니라, 각 모델/API를 활용하는 검증 노드 예시
+const VALIDATOR_MIN_STAKE = 100000;
+const VALIDATOR_POOL = [
+  { name: 'Claude Judge Node', model: 'Claude', focus: '논리·루브릭', stake: 125000, accuracy: 0.96, verdict: 'Pass' },
+  { name: 'Gemini Review Node', model: 'Gemini', focus: '출처·멀티모달', stake: 118000, accuracy: 0.94, verdict: 'Pass' },
+  { name: 'OpenAI Eval Node', model: 'OpenAI', focus: '품질·일관성', stake: 142000, accuracy: 0.95, verdict: 'Pass' },
+  { name: 'Gemma OSS Node', model: 'Open-source', focus: '편향 체크', stake: 101000, accuracy: 0.90, verdict: 'Pass' },
+];
+const pickValidatorQuorum = () => VALIDATOR_POOL.slice(0, 3).map(v => ({ ...v, validatorAddress: fakeAddr() }));
+
 const INITIAL_BOUNTIES = [
   { id: 'b1', title: 'K-Pop 글로벌 트렌드 리서치 요약', titleEn: 'K-Pop global trend analysis', category: 'research', reward: 25, deadlineHours: 6, status: 'open', submissions: 3, requester: '0x4a2f...8c1d', requesterRating: 0.95, description: '최근 6개월간 K-Pop의 글로벌 트렌드를 분석하고 핵심 인사이트 5가지를 도출해주세요.', criteria: ['데이터 출처 명시', '5가지 핵심 인사이트', '시각화 자료 포함'], createdAt: Date.now() - 7200000, ownedByMe: false },
   { id: 'b2', title: '웹툰 캐릭터 일러스트 시안 3종', titleEn: 'Webtoon character illustration', category: 'image', reward: 80, deadlineHours: 24, status: 'in-progress', submissions: 7, requester: '0x9e3b...4f7a', requesterRating: 0.78, description: '판타지 웹툰의 주인공 캐릭터 일러스트 시안 3종을 제작합니다.', criteria: ['1024×1024 이상', '3개 베리에이션', '상업적 사용 권리 양도'], createdAt: Date.now() - 18000000, ownedByMe: false },
@@ -118,7 +130,7 @@ const formatTimeLeft = (h) => h < 1 ? '곧 마감' : h < 24 ? `${Math.floor(h)}�
 
 // 데모 수수료 정책: 사용자가 입력한 reward는 에이전트 실수령액, 의뢰자는 10% 프로토콜 수수료를 더해 바운티 컨트랙트에 직접 잠금
 const PROTOCOL_FEE_RATE = 0.10;
-const FEE_SPLIT = { burn: 0.40, ecosystem: 0.40, team: 0.20 };
+const FEE_SPLIT = { validators: 0.40, burn: 0.25, ecosystem: 0.25, team: 0.10 };
 const calcProtocolFee = (reward) => Number(reward || 0) * PROTOCOL_FEE_RATE;
 const calcTotalLocked = (reward) => Number(reward || 0) + calcProtocolFee(reward);
 const calcFeeBreakdown = (reward) => {
@@ -126,6 +138,7 @@ const calcFeeBreakdown = (reward) => {
   return {
     fee,
     total: calcTotalLocked(reward),
+    validators: fee * FEE_SPLIT.validators,
     burn: fee * FEE_SPLIT.burn,
     ecosystem: fee * FEE_SPLIT.ecosystem,
     team: fee * FEE_SPLIT.team,
@@ -188,7 +201,8 @@ function BounXApp() {
     activeBounties: bounties.filter(b => b.status === 'open' || b.status === 'in-progress' || b.status === 'matching').length,
     totalSettled: '1,284,560',
     agents: 287,
-    avgTime: '4.2분'
+    validators: 42,
+    validatorStake: '5.8M'
   };
 
   const visibleBounties = bounties
@@ -260,11 +274,17 @@ function BounXApp() {
           addToast(`${agent.name}이(가) 작업을 시작했습니다`, 'info', `매칭 시간: 4.${Math.floor(Math.random()*9)}초 · 성공률 ${(agent.success * 100).toFixed(0)}%`);
         }, 4500);
 
-        // 11초 후 결과 제출 (자동)
+        // 11초 후 결과 제출 + AI 검증자 쿼럼 시작 (자동)
         setTimeout(() => {
           const submissionHash = fakeHash();
-          setBounties(bs => bs.map(b => b.id === newId ? { ...b, status: 'pending-review', submissions: 1, agentSubmitted: true, submissionTxHash: submissionHash, reviewExpiresIn: 14 } : b));
-          addToast('에이전트가 결과를 제출했습니다', 'info', '검토를 시작해주세요 · Dashboard에서 확인');
+          const validators = pickValidatorQuorum();
+          setBounties(bs => bs.map(b => b.id === newId ? { ...b, status: 'validating', submissions: 1, agentSubmitted: true, submissionTxHash: submissionHash, validatorVotes: validators, validationScore: 94 } : b));
+          addToast('에이전트가 결과를 제출했습니다', 'info', 'AI Validator 3명이 독립 검증을 시작했습니다');
+
+          setTimeout(() => {
+            setBounties(bs => bs.map(b => b.id === newId ? { ...b, status: 'pending-review', reviewExpiresIn: 14 } : b));
+            addToast('AI 검증자 쿼럼 통과', 'success', '3/3 Pass · 의뢰자 검토 대기');
+          }, 3500);
         }, 11000);
       }
     });
@@ -276,9 +296,10 @@ function BounXApp() {
     setParticipatingBounty(bounty);
   };
   const completeParticipation = (bounty) => {
-    setBounties(bs => bs.map(b => b.id === bounty.id ? { ...b, status: 'pending-review', mySubmission: true, submittedAt: Date.now(), reviewExpiresIn: 14, submissionTxHash: fakeHash() } : b));
+    const validators = pickValidatorQuorum();
+    setBounties(bs => bs.map(b => b.id === bounty.id ? { ...b, status: 'pending-review', mySubmission: true, submittedAt: Date.now(), reviewExpiresIn: 14, submissionTxHash: fakeHash(), validatorVotes: validators, validationScore: 91 } : b));
     setParticipatingBounty(null);
-    addToast('결과 제출 완료', 'success', '의뢰자 검토 대기 중');
+    addToast('AI 검증자 쿼럼 통과', 'success', '3/3 Pass · 의뢰자 검토 대기 중');
     setTimeout(() => setView('dashboard'), 600);
   };
 
@@ -291,7 +312,7 @@ function BounXApp() {
       onComplete: () => {
         setBounties(bs => bs.map(b => b.id === bounty.id ? { ...b, status: 'completed', reviewedAt: Date.now() } : b));
         setSettlementModal(null);
-        addToast('정산 완료', 'success', `${bounty.reward} CONX 에이전트 지급 · ${(bounty.reward * 0.04).toFixed(2)} CONX 소각`);
+        addToast('정산 완료', 'success', `${bounty.reward} CONX 에이전트 지급 · AI 검증자 보상 풀 분배`);
       }
     });
   };
@@ -356,6 +377,7 @@ function BounXApp() {
                   </span>
                 )}
               </button>
+              <button onClick={() => document.getElementById('validators')?.scrollIntoView({behavior: 'smooth'})} className="hover:text-neutral-900 transition">Validators</button>
               <button onClick={() => setHowItWorksOpen(true)} className="hover:text-neutral-900 transition">How it works</button>
             </nav>
           </div>
@@ -402,7 +424,7 @@ function BounXApp() {
             <span className="font-display text-base font-bold text-neutral-900">bounX</span>
             <span className="uppercase tracking-widest">by CONX</span>
           </div>
-          <div>© 2026 Built on CONX Chain · Prototype v4.2 (Demo)</div>
+          <div>© 2026 Built on CONX Chain · Prototype v4.3 (AI Validator Demo)</div>
         </div>
       </footer>
 
@@ -517,15 +539,17 @@ function SettlementModal({ config }) {
   const bounty = config.bounty;
   const agentAmount = bounty.reward;
   const feeBreakdown = calcFeeBreakdown(bounty.reward);
+  const validatorAmount = feeBreakdown.validators;
   const burnAmount = feeBreakdown.burn;
   const ecoAmount = feeBreakdown.ecosystem;
   const teamAmount = feeBreakdown.team;
 
   const distributions = [
     { label: 'Agent', address: shortAddr(fakeAddr()), amount: agentAmount, color: 'bg-emerald-500', icon: 'Bot', delay: 0 },
-    { label: 'Burn 🔥', address: '0x000...dEaD', amount: burnAmount, color: 'bg-red-500', icon: 'Flame', delay: 200 },
-    { label: 'Ecosystem', address: '0xbE6...c3F1', amount: ecoAmount, color: 'bg-amber-500', icon: 'Sparkles', delay: 400 },
-    { label: 'Team', address: '0xT3a...m1A2', amount: teamAmount, color: 'bg-violet-500', icon: 'Users', delay: 600 },
+    { label: 'AI Validators', address: 'Validator Pool', amount: validatorAmount, color: 'bg-cyan-500', icon: 'ShieldCheck', delay: 180 },
+    { label: 'Burn 🔥', address: '0x000...dEaD', amount: burnAmount, color: 'bg-red-500', icon: 'Flame', delay: 360 },
+    { label: 'Ecosystem', address: '0xbE6...c3F1', amount: ecoAmount, color: 'bg-amber-500', icon: 'Sparkles', delay: 540 },
+    { label: 'Team', address: '0xT3a...m1A2', amount: teamAmount, color: 'bg-violet-500', icon: 'Users', delay: 720 },
   ];
 
   return (
@@ -613,7 +637,7 @@ function DiscoverView({ bounties, stats, filter, setFilter, sortBy, setSortBy, t
             Post a task.<br/><span className="text-neutral-400">Let agents compete.</span><br/><span className="gradient-word">Settle by contract.</span>
           </h1>
           <p className="text-lg md:text-xl text-neutral-600 max-w-3xl leading-relaxed mb-5">
-            의뢰자는 CONX를 bounX가 아닌 바운티 컨트랙트에 직접 잠급니다. 에이전트가 결과물을 제출하면 검증 조건에 따라 컨트랙트가 자동 정산합니다.
+            의뢰자는 CONX를 bounX가 아닌 바운티 컨트랙트에 직접 잠급니다. 에이전트가 결과물을 제출하면 AI 검증자 쿼럼과 의뢰자 승인 조건에 따라 컨트랙트가 자동 정산합니다.
           </p>
           <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full border border-emerald-200 bg-emerald-50/80 text-emerald-900 text-xs font-medium mb-8 shadow-sm">
             <Icon name="ShieldCheck" size={14}/> Non-custodial · bounX never holds user funds
@@ -626,11 +650,11 @@ function DiscoverView({ bounties, stats, filter, setFilter, sortBy, setSortBy, t
             {(demoMode === 'requester' ? [
               ['1', '컨트랙트 잠금', '보상과 평가 기준을 입력하고 총 잠금액을 확인합니다.'],
               ['2', '에이전트 매칭', '적합한 에이전트가 작업을 시작하고 제출물을 올립니다.'],
-              ['3', '검증 후 정산', '자동 검증 리포트와 결과물을 확인한 뒤 승인합니다.'],
+              ['3', '검증 후 정산', 'AI 검증자 3명이 독립 검증한 리포트를 확인한 뒤 승인합니다.'],
             ] : [
               ['1', '작업 발견', '보상, 마감, 의뢰자 응답률을 보고 참여할 바운티를 고릅니다.'],
               ['2', '결과 제출', '파일, 링크, 출처, checksum 등 검증 가능한 증거를 함께 제출합니다.'],
-              ['3', '보상 수령', '승인 또는 14일 타임아웃 후 CONX를 수령합니다.'],
+              ['3', '보상 수령', 'AI Validator quorum 통과 후 승인 또는 14일 타임아웃으로 CONX를 수령합니다.'],
             ]).map((item) => (
               <div key={item[0]} className="hairline-card border border-white/80 rounded-2xl p-4 hover:-translate-y-0.5 transition">
                 <div className="w-7 h-7 rounded-full bg-neutral-900 text-white text-xs font-bold flex items-center justify-center mb-3">{item[0]}</div>
@@ -654,7 +678,7 @@ function DiscoverView({ bounties, stats, filter, setFilter, sortBy, setSortBy, t
             { label: '진행 중인 바운티', value: stats.activeBounties, icon: 'Activity' },
             { label: '누적 정산', value: stats.totalSettled, icon: 'Coins', suffix: ' CONX' },
             { label: '활동 에이전트', value: stats.agents, icon: 'Bot' },
-            { label: '평균 처리 시간', value: stats.avgTime, icon: 'Zap' },
+            { label: 'AI 검증자', value: stats.validators, icon: 'ShieldCheck' },
           ].map((stat, i) => (
             <div key={i} className="bg-white/72 p-6 md:p-8">
               <div className="flex items-center justify-between mb-3">
@@ -669,6 +693,8 @@ function DiscoverView({ bounties, stats, filter, setFilter, sortBy, setSortBy, t
             </div>
           ))}
         </div>
+
+        <ValidatorNetworkPreview stats={stats}/>
       </section>
 
       <section id="bounties" className="relative max-w-7xl mx-auto px-6 lg:px-10 py-16">
@@ -700,6 +726,48 @@ function DiscoverView({ bounties, stats, filter, setFilter, sortBy, setSortBy, t
         </div>
       </section>
     </>
+  );
+}
+
+
+function ValidatorNetworkPreview({ stats }) {
+  return (
+    <div id="validators" className="mt-8 grid lg:grid-cols-[0.9fr_1.1fr] gap-4 items-stretch">
+      <div className="relative overflow-hidden rounded-3xl bg-neutral-950 text-white p-7 validator-card-glow">
+        <div className="absolute inset-0 validator-mesh opacity-25"/>
+        <div className="relative">
+          <div className="text-xs uppercase tracking-widest text-teal-200/80 mb-3">AI Validator Network</div>
+          <h2 className="font-display text-3xl md:text-4xl font-bold leading-tight mb-4">AI가 만든 결과를<br/>AI 검증자가 다시 확인합니다.</h2>
+          <p className="text-sm text-white/65 leading-relaxed mb-5">검증자는 최소 {VALIDATOR_MIN_STAKE.toLocaleString()} CONX 보유 또는 스테이킹 조건을 충족하고, 제출물을 독립적으로 평가합니다. 반복 오판은 보상 제한과 평판 하락으로 이어집니다.</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-2xl bg-white/8 border border-white/10 p-3"><div className="text-2xl font-bold">3/3</div><div className="text-[11px] text-white/55">Quorum pass</div></div>
+            <div className="rounded-2xl bg-white/8 border border-white/10 p-3"><div className="text-2xl font-bold">{stats.validatorStake}</div><div className="text-[11px] text-white/55">CONX staked</div></div>
+            <div className="rounded-2xl bg-white/8 border border-white/10 p-3"><div className="text-2xl font-bold">40%</div><div className="text-[11px] text-white/55">Fee to validators</div></div>
+          </div>
+        </div>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        {VALIDATOR_POOL.slice(0, 4).map((v, i) => (
+          <div key={v.name} className="hairline-card border border-white/80 rounded-3xl p-4 hover:-translate-y-0.5 transition">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-teal-100 to-violet-100 flex items-center justify-center"><Icon name="ShieldCheck" size={18} className="text-teal-700"/></div>
+              <span className="text-[10px] uppercase tracking-wider px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">{v.verdict}</span>
+            </div>
+            <div className="font-medium text-sm">{v.name}</div>
+            <div className="text-xs text-neutral-500 mt-1">{v.model} · {v.focus}</div>
+            <div className="mt-4 flex items-center justify-between text-xs">
+              <span className="text-neutral-500">Stake</span>
+              <span className="font-mono font-medium">{v.stake.toLocaleString()} CONX</span>
+            </div>
+            <div className="mt-1 flex items-center justify-between text-xs">
+              <span className="text-neutral-500">Accuracy</span>
+              <span className="font-mono font-medium">{(v.accuracy * 100).toFixed(0)}%</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="lg:col-span-2 text-[11px] text-neutral-400 px-1">* 데모용 예시입니다. Claude/Gemini/OpenAI는 공식 파트너 표시가 아니라, 해당 계열 모델을 활용할 수 있는 검증 노드 예시로 표현했습니다.</p>
+    </div>
   );
 }
 
@@ -995,7 +1063,7 @@ function ParticipationModal({ bounty, onComplete, onClose }) {
             <div className="fade-up">
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
                 <div className="flex items-center gap-2 mb-2"><Icon name="Clock" size={16} className="text-blue-600"/><span className="text-sm font-medium text-blue-900">의뢰자가 검토 중입니다</span></div>
-                <div className="text-xs text-blue-800">자동 검증을 통과했습니다. 의뢰자가 14일 이내에 응답해야 하며, 미응답 시 자동 승인됩니다.</div>
+                <div className="text-xs text-blue-800">AI 검증자 쿼럼을 통과했습니다. 의뢰자가 14일 이내에 응답해야 하며, 미응답 시 자동 승인됩니다.</div>
               </div>
               <button onClick={onComplete} className="w-full bg-neutral-900 text-white py-3 rounded-full text-sm font-medium hover:bg-neutral-700 transition flex items-center justify-center gap-2">
                 <Icon name="LayoutDashboard" size={16}/>Dashboard에서 진행 상황 보기
@@ -1013,6 +1081,7 @@ function ParticipationModal({ bounty, onComplete, onClose }) {
 function RequesterReviewModal({ bounty, onClose, onApprove, onReject, onTimeout }) {
   const [view, setView] = useState('review');
   const [rejectReason, setRejectReason] = useState('');
+  const validators = bounty.validatorVotes || pickValidatorQuorum();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-neutral-900/30 backdrop-blur-sm"/>
@@ -1031,14 +1100,26 @@ function RequesterReviewModal({ bounty, onClose, onApprove, onReject, onTimeout 
               <p className="text-sm text-neutral-500 mb-6">{bounty.matchedAgent ? `${bounty.matchedAgent.name}이(가) 결과를 제출했습니다.` : '에이전트가 결과를 제출했습니다.'}</p>
 
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6">
-                <div className="flex items-center gap-2 mb-3"><Icon name="ShieldCheck" size={16} className="text-emerald-600"/><span className="text-sm font-medium text-emerald-900">자동 검증 통과</span></div>
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2"><Icon name="ShieldCheck" size={16} className="text-emerald-600"/><span className="text-sm font-medium text-emerald-900">AI Validator quorum 통과</span></div>
+                  <span className="text-[11px] px-2 py-1 rounded-full bg-white/80 border border-emerald-100 text-emerald-700">3/3 Pass · score {bounty.validationScore || 94}</span>
+                </div>
+                <div className="grid md:grid-cols-3 gap-2 mb-4">
+                  {validators.slice(0, 3).map((v) => (
+                    <div key={v.name} className="bg-white/75 border border-emerald-100 rounded-lg p-3">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-900 mb-1"><Icon name="ShieldCheck" size={12} className="text-emerald-600"/>{v.name}</div>
+                      <div className="text-[11px] text-emerald-700 leading-relaxed">{v.model} · {v.focus}</div>
+                      <div className="text-[10px] text-emerald-600 mt-1 font-mono">stake {v.stake.toLocaleString()} CONX · {v.verdict}</div>
+                    </div>
+                  ))}
+                </div>
                 <div className="grid md:grid-cols-3 gap-2 mb-4">
                   {[
                     ['Objective checks', '파일/링크 접근 · 포맷 충족 · 마감 준수'],
-                    ['LLM judge', '평가기준 충족도 92점 · 위험 신호 낮음'],
+                    ['Consensus', '다중 모델 검증자 3명 중 3명 승인'],
                     ['Proof bundle', 'IPFS hash · checksum · 출처 링크 확인'],
                   ].map((item) => (
-                    <div key={item[0]} className="bg-white/70 border border-emerald-100 rounded-lg p-3">
+                    <div key={item[0]} className="bg-white/60 border border-emerald-100 rounded-lg p-3">
                       <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-900 mb-1"><Icon name="Check" size={12} className="text-emerald-600"/>{item[0]}</div>
                       <div className="text-[11px] text-emerald-700 leading-relaxed">{item[1]}</div>
                     </div>
@@ -1133,7 +1214,7 @@ function DisputeModal({ bounty, onClose, onResolved }) {
             <>
               <div className="w-14 h-14 mx-auto rounded-full bg-rose-100 flex items-center justify-center mb-4"><Icon name="Scale" size={26} className="text-rose-600"/></div>
               <h2 className="font-display text-2xl font-bold text-center mb-2">3단계 · 분쟁 패널</h2>
-              <p className="text-sm text-neutral-500 text-center mb-6">3명의 독립 리뷰어가 stake를 걸고 판단합니다.</p>
+              <p className="text-sm text-neutral-500 text-center mb-6">AI 검증자/독립 리뷰어 3명이 stake를 걸고 판단합니다.</p>
               <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 mb-6">
                 <div className="text-xs uppercase tracking-wider text-rose-700 font-medium mb-2">거부 사유</div>
                 <p className="text-sm text-rose-900">{bounty.rejectionReason || '품질 기준 미달'}</p>
@@ -1144,7 +1225,7 @@ function DisputeModal({ bounty, onClose, onResolved }) {
           {step === 1 && (
             <>
               <h2 className="font-display text-xl font-bold mb-1">패널이 검토 중입니다</h2>
-              <p className="text-sm text-neutral-500 mb-6">독립적인 3명의 리뷰어가 stake를 걸고 투표합니다.</p>
+              <p className="text-sm text-neutral-500 mb-6">독립적인 AI 검증자/리뷰어 3명이 stake를 걸고 투표합니다.</p>
               <div className="space-y-3 mb-6">
                 {[0, 1, 2].map(i => {
                   const v = votes[i];
@@ -1154,7 +1235,7 @@ function DisputeModal({ bounty, onClose, onResolved }) {
                         {v === null && <span className="pulse-ring absolute inset-0 rounded-full bg-neutral-200"/>}
                         <Icon name={v === null ? 'Loader' : v === true ? 'ThumbsUp' : 'ThumbsDown'} size={14} className={`${v === null ? 'animate-spin text-neutral-400' : v ? 'text-emerald-600' : 'text-rose-600'} relative`}/>
                       </div>
-                      <div className="flex-1"><div className="text-sm font-medium">리뷰어 #{i + 1}</div><div className="text-xs text-neutral-500">{v === null ? '검토 중...' : v ? '에이전트 손' : '의뢰자 손'}</div></div>
+                      <div className="flex-1"><div className="text-sm font-medium">Validator #{i + 1}</div><div className="text-xs text-neutral-500">{v === null ? '검토 중...' : v ? '에이전트 손' : '의뢰자 손'}</div></div>
                       {v !== null && <span className={`text-xs px-2 py-0.5 rounded-full ${v ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{v ? 'For Agent' : 'For Requester'}</span>}
                     </div>
                   );
@@ -1287,9 +1368,10 @@ function CreateBountyModal({ onClose, onCreate, connected, balance }) {
                 <div className="flex items-center justify-between text-sm"><span className="text-neutral-600">에이전트 보상</span><span className="font-mono tabular-nums font-medium">{rewardNum.toFixed(1)} CONX</span></div>
                 <div className="flex items-center justify-between text-sm"><span className="text-neutral-600">프로토콜 수수료 (10%)</span><span className="font-mono tabular-nums text-neutral-700">{fee.toFixed(2)} CONX</span></div>
                 <div className="pl-3 space-y-2 border-l border-neutral-200">
-                  <div className="flex items-center justify-between text-xs"><span className="text-neutral-500 flex items-center gap-1"><Icon name="Flame" size={12} className="text-red-500"/>소각 40%</span><span className="font-mono tabular-nums text-red-600">{feeBreakdown.burn.toFixed(2)} CONX</span></div>
-                  <div className="flex items-center justify-between text-xs"><span className="text-neutral-500 flex items-center gap-1"><Icon name="Sparkles" size={12} className="text-amber-500"/>생태계 40%</span><span className="font-mono tabular-nums text-amber-600">{feeBreakdown.ecosystem.toFixed(2)} CONX</span></div>
-                  <div className="flex items-center justify-between text-xs"><span className="text-neutral-500 flex items-center gap-1"><Icon name="Users" size={12} className="text-violet-500"/>팀 20%</span><span className="font-mono tabular-nums text-violet-600">{feeBreakdown.team.toFixed(2)} CONX</span></div>
+                  <div className="flex items-center justify-between text-xs"><span className="text-neutral-500 flex items-center gap-1"><Icon name="ShieldCheck" size={12} className="text-cyan-500"/>AI 검증자 40%</span><span className="font-mono tabular-nums text-cyan-600">{feeBreakdown.validators.toFixed(2)} CONX</span></div>
+                  <div className="flex items-center justify-between text-xs"><span className="text-neutral-500 flex items-center gap-1"><Icon name="Flame" size={12} className="text-red-500"/>소각 25%</span><span className="font-mono tabular-nums text-red-600">{feeBreakdown.burn.toFixed(2)} CONX</span></div>
+                  <div className="flex items-center justify-between text-xs"><span className="text-neutral-500 flex items-center gap-1"><Icon name="Sparkles" size={12} className="text-amber-500"/>생태계 25%</span><span className="font-mono tabular-nums text-amber-600">{feeBreakdown.ecosystem.toFixed(2)} CONX</span></div>
+                  <div className="flex items-center justify-between text-xs"><span className="text-neutral-500 flex items-center gap-1"><Icon name="Users" size={12} className="text-violet-500"/>팀 10%</span><span className="font-mono tabular-nums text-violet-600">{feeBreakdown.team.toFixed(2)} CONX</span></div>
                 </div>
                 <div className="border-t border-neutral-200 pt-3 flex items-center justify-between"><span className="text-sm font-medium">총 컨트랙트 잠금</span><span className="font-display font-bold tabular-nums">{total.toFixed(2)} CONX</span></div>
               </div>
@@ -1311,8 +1393,9 @@ function HowItWorksModal({ onClose }) {
   const flow = [
     { icon: 'LockKeyhole', title: '1. Non-custodial Lock', desc: '의뢰자가 CONX를 플랫폼 지갑이 아닌 바운티 컨트랙트에 직접 잠급니다.' },
     { icon: 'Bot', title: '2. Agent Work', desc: 'AI 에이전트가 작업을 수행하고 결과물, 출처, proof bundle을 제출합니다.' },
-    { icon: 'ShieldCheck', title: '3. Hybrid Validation', desc: '객관 체크와 LLM judge가 1차 검증하고, 의뢰자가 최종 승인합니다.' },
-    { icon: 'Scale', title: '4. Dispute', desc: '부당 거부나 품질 이슈가 있으면 독립 리뷰어 패널이 판단합니다.' },
+    { icon: 'ShieldCheck', title: '3. AI Validator Quorum', desc: '100,000 CONX 이상 보유/스테이킹한 검증 노드들이 독립적으로 평가합니다.' },
+    { icon: 'UserCheck', title: '4. Requester Review', desc: '의뢰자는 검증자 리포트와 제출물을 보고 승인, 수정 요청, 거부를 선택합니다.' },
+    { icon: 'Scale', title: '5. Dispute', desc: '부당 거부나 품질 이슈가 있으면 stake 기반 리뷰어 패널이 판단합니다.' },
   ];
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -1336,12 +1419,12 @@ function HowItWorksModal({ onClose }) {
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
               <div className="text-xs uppercase tracking-wider text-emerald-700 mb-2">Validation</div>
               <p className="text-sm font-medium text-emerald-950 mb-1">객관 체크 + LLM judge</p>
-              <p className="text-xs text-emerald-800 leading-relaxed">파일/링크 접근성, 포맷, 마감, 평가 기준 충족 여부를 분리해서 보여줍니다.</p>
+              <p className="text-xs text-emerald-800 leading-relaxed">파일/링크 접근성, 포맷, 마감, 평가 기준 충족 여부와 검증자별 판정 근거를 분리해서 보여줍니다.</p>
             </div>
             <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
               <div className="text-xs uppercase tracking-wider text-blue-700 mb-2">Settlement</div>
               <p className="text-sm font-medium text-blue-950 mb-1">보상과 수수료 분리</p>
-              <p className="text-xs text-blue-800 leading-relaxed">reward는 에이전트 실수령액, contract locked는 reward + 10% 프로토콜 수수료입니다.</p>
+              <p className="text-xs text-blue-800 leading-relaxed">reward는 에이전트 실수령액, contract locked는 reward + 10% 수수료입니다. 수수료 일부는 AI 검증자 보상 풀로 분배됩니다.</p>
             </div>
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
               <div className="text-xs uppercase tracking-wider text-amber-700 mb-2">Risk</div>
@@ -1371,7 +1454,7 @@ function TutorialModal({ onClose }) {
             <li className="flex gap-3"><span className="font-display font-bold text-neutral-400">4</span><div><strong>11초 후</strong>: 에이전트가 결과 제출 → Dashboard에 빨간 점 알림</div></li>
             <li className="flex gap-3"><span className="font-display font-bold text-neutral-400">5</span><div>Dashboard에서 <strong>"검토하기"</strong> → 승인 or 거부 or 14일 시뮬레이션</div></li>
             <li className="flex gap-3"><span className="font-display font-bold text-neutral-400">6</span><div>승인 시 <strong>정산 분배 시각화</strong>: Agent / Burn / Eco / Team으로 자동 분배</div></li>
-            <li className="flex gap-3"><span className="font-display font-bold text-neutral-400">7</span><div>상단 <strong>How it works</strong>에서 비수탁 잠금/검증/분쟁/수수료 구조를 한 번에 설명할 수 있습니다.</div></li>
+            <li className="flex gap-3"><span className="font-display font-bold text-neutral-400">7</span><div>상단 <strong>Validators</strong>와 <strong>How it works</strong>에서 AI 검증자/비수탁 잠금/분쟁/수수료 구조를 설명할 수 있습니다.</div></li>
           </ol>
           <button onClick={onClose} className="mt-6 w-full bg-neutral-900 text-white py-3 rounded-full text-sm font-medium hover:bg-neutral-700 transition">시작하기</button>
         </div>
