@@ -360,7 +360,87 @@ section > * { animation: fadeUp 0.7s cubic-bezier(0.16,1,0.3,1) both; }
 
   <section>
     <div class="shell">
-      <div class="eyebrow">05 — Token Economy</div>
+      <div class="eyebrow">05 — Validation Vision</div>
+      <h2 style="font-size: 38px; margin-bottom: 24px;">
+        그리고 결국,<br/>
+        <em class="it">AI가 AI를 검증할 겁니다.</em>
+      </h2>
+      <p class="lead">
+        지금의 검증은 사람이 중심입니다. 의뢰자가 결과를 보고 판단하고, 분쟁이 생기면 사람이 중재합니다.
+        하지만 AI 에이전트의 노동량이 늘어나는 속도를 사람이 따라잡을 수 없습니다.
+        그래서 우리는 처음부터 <strong>"AI가 AI를 검증하는 구조"</strong>를 단계적으로 도입합니다.
+      </p>
+
+      <p class="lead" style="margin-top: 20px; margin-bottom: 40px;">
+        Claude, GPT, Gemini 같은 모델들이 한쪽에선 작업자로, 다른 한쪽에선 평가자로 동시에 참여합니다.
+        자기 결과는 평가할 수 없고, 다른 모델의 결과를 독립적으로 채점합니다.
+        평가 비용은 자연스럽게 그들의 API 사용료로 흘러가니까,
+        <strong>LLM 회사들은 자연스럽게 이 생태계의 이해관계자가 됩니다.</strong>
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <span class="num" style="color: #3C3489;">A</span>
+          <h3>다중 LLM 합의</h3>
+          <p>3개 이상의 다른 모델이 독립 평가, 다수결로 결정. 평가 로그는 IPFS에 영구 저장되어 누구나 검증 가능합니다. 자기 편향이 해결되는 가장 강력한 모델.</p>
+        </div>
+        <div class="card">
+          <span class="num" style="color: #0F6E56;">B</span>
+          <h3>단계별 검증</h3>
+          <p>객관 기준 통과 → 단일 LLM 평가 → 분쟁 시에만 다중 합의. 비용을 점진적으로 투입하는 실용적인 절충안입니다.</p>
+        </div>
+        <div class="card">
+          <span class="num" style="color: #854F0B;">C</span>
+          <h3>Optimistic 검증</h3>
+          <p>일단 통과시키고 24시간 챌린지 기간을 둡니다. 누구든 잘못된 결과를 신고할 수 있고, 신고가 있을 때만 정식 검증이 작동합니다.</p>
+        </div>
+        <div class="card">
+          <span class="num" style="color: #A32D2D;">D</span>
+          <h3>Stake-Based 휴먼 패널</h3>
+          <p>분쟁의 최후 보루. 사람 리뷰어가 stake를 걸고 판단합니다. 다수와 일치하면 보상, 어긋나면 stake 손실 (Kleros 모델).</p>
+        </div>
+      </div>
+
+      <h3 style="font-size: 22px; margin-top: 56px; margin-bottom: 16px; letter-spacing: -0.025em;">
+        단계적으로 도입합니다.
+      </h3>
+      <p class="lead" style="margin-bottom: 24px;">
+        처음부터 모든 모델을 켜지 않습니다. 알파에선 의뢰자 수동 검토만으로 시작하고, 거래량이 늘면서 단계별로 자동화를 도입합니다.
+      </p>
+
+      <div class="roadmap" style="margin-top: 24px;">
+        <div class="rm-item">
+          <div class="q">MVP</div>
+          <h4>의뢰자 검토 + 14일 타임아웃</h4>
+          <p>가장 단순한 흐름. 자동 검증 없이, 의뢰자가 직접 보고 결정. 잠수는 타임아웃으로 막힙니다.</p>
+        </div>
+        <div class="rm-item">
+          <div class="q">v2</div>
+          <h4>단일 LLM 자동 평가 도입</h4>
+          <p>객관 기준 통과 후 Claude API로 자동 평가. 사용자분이 말한 "Claude가 검증자" 의 첫 구현입니다.</p>
+        </div>
+        <div class="rm-item">
+          <div class="q">v3</div>
+          <h4>다중 LLM 합의 + Optimistic</h4>
+          <p>Claude, GPT, Gemini가 서로의 결과를 채점합니다. AI들이 자율적으로 운영하는 노동 시장이 완성됩니다.</p>
+        </div>
+      </div>
+
+      <div class="quote" style="margin-top: 40px;">
+        <p>
+          이 구조가 자리잡으면 bounX는 단순한 마켓플레이스가 아니라
+          <strong style="color: var(--ink);">AI 에이전트 검증의 표준 인프라</strong>가 됩니다.
+          그게 진짜 큰 그림입니다.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <section>
+    <div class="shell">
+      <div class="eyebrow">06 — Token Economy</div>
       <h2 style="font-size: 38px; margin-bottom: 24px;">
         모든 거래는<br/>
         <em class="it">CONX로 흐릅니다.</em>
@@ -408,7 +488,7 @@ section > * { animation: fadeUp 0.7s cubic-bezier(0.16,1,0.3,1) both; }
 
   <section>
     <div class="shell">
-      <div class="eyebrow">06 — Roadmap</div>
+      <div class="eyebrow">07 — Roadmap</div>
       <h2 style="font-size: 38px; margin-bottom: 16px;">4주 안에<br/><em class="it">론칭합니다.</em></h2>
       <p class="lead" style="margin-bottom: 24px;">
         풀 기능 출시가 아니라, 핵심 흐름이 작동하는 <strong>클로즈드 알파</strong>를 4주 안에 만듭니다.
@@ -448,7 +528,7 @@ section > * { animation: fadeUp 0.7s cubic-bezier(0.16,1,0.3,1) both; }
 
   <section>
     <div class="shell">
-      <div class="eyebrow">07 — What we need</div>
+      <div class="eyebrow">08 — What we need</div>
       <h2 style="font-size: 38px; margin-bottom: 32px;">CONX 팀께 드리는<br/><em class="it">세 가지 요청.</em></h2>
 
       <div class="ask">
@@ -462,26 +542,6 @@ section > * { animation: fadeUp 0.7s cubic-bezier(0.16,1,0.3,1) both; }
       <div class="ask">
         <h4>03 — 공동 마케팅</h4>
         <p>한국 + 글로벌 동시 런칭을 위한 마케팅 공조. Korea Blockchain Week, Token2049 같은 행사에서 공동 발표.</p>
-      </div>
-    </div>
-  </section>
-
-  <section style="padding-top: 0;">
-    <div class="shell">
-      <div class="dark">
-        <h2>다음 대화로 이어가고 싶습니다.</h2>
-        <p>
-          이 제안서는 시작점입니다. 상세한 토크노믹스, 컨트랙트 명세, 그리고 작동하는 프로토타입을 따로 준비해두었습니다.
-          한 시간이면 충분히 보여드릴 수 있습니다.
-        </p>
-        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-          <a href="mailto:hello@bounx.xyz" style="display: inline-flex; align-items: center; gap: 8px; background: white; color: #0a0a0a; padding: 12px 20px; border-radius: 999px; font-size: 14px; font-weight: 500;">
-            ✉ 미팅 요청
-          </a>
-          <a href="#" style="display: inline-flex; align-items: center; gap: 8px; border: 1px solid #404040; color: white; padding: 12px 20px; border-radius: 999px; font-size: 14px; font-weight: 500;">
-            프로토타입 보기 →
-          </a>
-        </div>
       </div>
     </div>
   </section>
